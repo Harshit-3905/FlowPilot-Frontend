@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Stub Clerk + API URL so `next build` / middleware init without real secrets
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktc3R1Yi5jbGVyay5hY2NvdW50JDAw
+      CLERK_SECRET_KEY: sk_test_ci_stub_secret_key_do_not_use_in_prod
+      NEXT_PUBLIC_API_URL: https://api.example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
