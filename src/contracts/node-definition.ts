@@ -1,5 +1,11 @@
 import { z } from "zod";
+import { gpt55ProDefinition } from "./nodes/gpt-5-5-pro";
 import { gptImage2Definition } from "./nodes/gpt-image-2";
+import { klingV3ProDefinition } from "./nodes/kling-v3-pro";
+import { mergeVideosDefinition } from "./nodes/merge-videos";
+import { requestDefinition } from "./nodes/request";
+import { responseDefinition } from "./nodes/response";
+import { seedance20Definition } from "./nodes/seedance-2-0";
 
 /** UI control kinds for `ui.fields` (extend as real nodes land). */
 export const UiControlSchema = z.enum([
@@ -26,11 +32,26 @@ export const UiFieldSchema = z.object({
   label: z.string().min(1),
   default: z.unknown().optional(),
   advanced: z.boolean().optional(),
+  /**
+   * When set, field (and its `in:<key>` row) only appears for these sub-model ids.
+   * Omit / empty = visible for every mode.
+   */
+  subModelIds: z.array(z.string().min(1)).optional(),
   /** Required when control === "select". */
   options: z.array(UiFieldOptionSchema).optional(),
 });
 
 export type UiField = z.infer<typeof UiFieldSchema>;
+
+/** Mode-aware UI: honor `ui.fields[].subModelIds` against `activeSubModelId`. */
+export function isUiFieldVisibleForSubModel(
+  field: UiField,
+  activeSubModelId: string | null | undefined,
+): boolean {
+  if (!field.subModelIds || field.subModelIds.length === 0) return true;
+  if (!activeSubModelId) return false;
+  return field.subModelIds.includes(activeSubModelId);
+}
 
 /**
  * Handle descriptors. Product exports use `in:<key>` / `out:<key>`
@@ -100,8 +121,8 @@ export const CreditsMetadataSchema = z.union([
 export type NodeSubModel = {
   id: string;
   label: string;
-  input: z.ZodTypeAny;
-  output: z.ZodTypeAny;
+  input: z.ZodType<any>;
+  output: z.ZodType<any>;
 };
 
 export const NodeSubModelSchema = z.object({
@@ -119,8 +140,8 @@ export type NodeDefinition = {
   type: string;
   label: string;
   category: string;
-  input: z.ZodTypeAny;
-  output: z.ZodTypeAny;
+  input: z.ZodType<any>;
+  output: z.ZodType<any>;
   ui: NodeUi;
   credits?: CreditsMetadata;
   subModels?: NodeSubModel[];
@@ -143,7 +164,13 @@ export const NodeDefinitionSchema = z.object({
 
 /** Registry — add nodes by importing a definition file and assigning here. */
 export const nodeRegistry: Record<string, NodeDefinition> = {
+  [requestDefinition.type]: requestDefinition,
+  [responseDefinition.type]: responseDefinition,
   [gptImage2Definition.type]: gptImage2Definition,
+  [gpt55ProDefinition.type]: gpt55ProDefinition,
+  [seedance20Definition.type]: seedance20Definition,
+  [klingV3ProDefinition.type]: klingV3ProDefinition,
+  [mergeVideosDefinition.type]: mergeVideosDefinition,
 };
 
 export function getNode(type: string): NodeDefinition | undefined {

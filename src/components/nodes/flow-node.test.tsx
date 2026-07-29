@@ -80,6 +80,13 @@ describe("FlowNode on-node settings", () => {
     expect(config.activeSubModelId).toBe("gpt-image-2-edit");
   });
 
+  it("hides Image field in Text to Image; shows it in Image to Image", () => {
+    const { queryByTestId, getByTestId } = renderFlowNode();
+    expect(queryByTestId("field-row-image_urls")).not.toBeInTheDocument();
+    fireEvent.click(getByTestId("submodel-gpt-image-2-edit"));
+    expect(getByTestId("field-row-image_urls")).toBeInTheDocument();
+  });
+
   it("shows credit estimate", () => {
     const { node, getByTestId } = renderFlowNode();
     expect(getByTestId(`flow-node-credits-${node.id}`)).toHaveTextContent(

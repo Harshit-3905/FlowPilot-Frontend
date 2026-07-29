@@ -22,6 +22,7 @@ export {
   UiHandlesSchema,
   ZodTypeAnySchema,
   getNode,
+  isUiFieldVisibleForSubModel,
   listNodes,
   nodeRegistry,
   type CreditsMetadata,
@@ -82,3 +83,59 @@ export {
   type GptImage2Input,
   type GptImage2Output,
 } from "./nodes/gpt-image-2";
+export {
+  Gpt55ProInputSchema,
+  Gpt55ProOutputSchema,
+  estimateGpt55ProCredits,
+  gpt55ProDefinition,
+  type Gpt55ProInput,
+  type Gpt55ProOutput,
+} from "./nodes/gpt-5-5-pro";
+export {
+  KlingV3ProInputSchema,
+  KlingV3ProOutputSchema,
+  estimateKlingV3ProCredits,
+  klingV3ProDefinition,
+  KLING_V3_PRO_ASPECT_RATIOS,
+  KLING_V3_PRO_DURATIONS,
+  type KlingV3ProInput,
+  type KlingV3ProOutput,
+} from "./nodes/kling-v3-pro";
+export {
+  MergeVideosInputSchema,
+  MergeVideosOutputSchema,
+  estimateMergeVideosCredits,
+  mergeVideosDefinition,
+  MERGE_VIDEOS_TRANSITIONS,
+  type MergeVideosInput,
+  type MergeVideosOutput,
+} from "./nodes/merge-videos";
+export {
+  Seedance20InputSchema,
+  Seedance20OutputSchema,
+  estimateSeedance20Credits,
+  seedance20Definition,
+  SEEDANCE_2_0_ASPECT_RATIOS,
+  SEEDANCE_2_0_DURATIONS,
+  SEEDANCE_2_0_RESOLUTIONS,
+  type Seedance20Input,
+  type Seedance20Output,
+} from "./nodes/seedance-2-0";
+export {
+  RequestDynamicFieldSchema,
+  RequestInputSchema,
+  RequestOutputSchema,
+  estimateRequestCredits,
+  requestDefinition,
+  type RequestDynamicField,
+  type RequestInput,
+  type RequestOutput,
+} from "./nodes/request";
+export {
+  ResponseInputSchema,
+  ResponseOutputSchema,
+  estimateResponseCredits,
+  responseDefinition,
+  type ResponseInput,
+  type ResponseOutput,
+} from "./nodes/response";

@@ -79,6 +79,42 @@ describe("nodeRegistry", () => {
     expect(listNodes().some((n) => n.type === "gpt_image_2")).toBe(true);
   });
 
+  it("includes kling_v3_pro", () => {
+    expect(nodeRegistry.kling_v3_pro?.type).toBe("kling_v3_pro");
+    expect(getNode("kling_v3_pro")?.label).toBe("Kling v3 Pro");
+    expect(listNodes().some((n) => n.type === "kling_v3_pro")).toBe(true);
+  });
+
+  it("includes gpt_5_5_pro", () => {
+    expect(nodeRegistry.gpt_5_5_pro?.type).toBe("gpt_5_5_pro");
+    expect(getNode("gpt_5_5_pro")?.label).toBe("GPT 5.5 Pro");
+    expect(listNodes().some((n) => n.type === "gpt_5_5_pro")).toBe(true);
+  });
+
+  it("includes merge_videos", () => {
+    expect(nodeRegistry.merge_videos?.type).toBe("merge_videos");
+    expect(getNode("merge_videos")?.label).toBe("Merge Videos");
+    expect(listNodes().some((n) => n.type === "merge_videos")).toBe(true);
+  });
+
+  it("includes request", () => {
+    expect(nodeRegistry.request?.type).toBe("request");
+    expect(getNode("request")?.label).toBe("Request Inputs");
+    expect(listNodes().some((n) => n.type === "request")).toBe(true);
+  });
+
+  it("includes response", () => {
+    expect(nodeRegistry.response?.type).toBe("response");
+    expect(getNode("response")?.label).toBe("Response");
+    expect(listNodes().some((n) => n.type === "response")).toBe(true);
+  });
+
+  it("includes seedance_2_0", () => {
+    expect(nodeRegistry.seedance_2_0?.type).toBe("seedance_2_0");
+    expect(getNode("seedance_2_0")?.label).toBe("Seedance 2.0");
+    expect(listNodes().some((n) => n.type === "seedance_2_0")).toBe(true);
+  });
+
   it("getNode unknown type returns undefined", () => {
     expect(getNode("missing")).toBeUndefined();
   });

@@ -1,4 +1,9 @@
-import { getNode, type NodeDefinition, type UiField } from "@/contracts";
+import {
+  getNode,
+  isUiFieldVisibleForSubModel,
+  type NodeDefinition,
+  type UiField,
+} from "@/contracts";
 import type { ReactNode } from "react";
 
 type NodeConfigFormProps = {
@@ -103,8 +108,17 @@ function NodeField({ field }: { field: UiField }) {
 
 export function NodeConfigForm(props: NodeConfigFormProps) {
   const nodeDefinition = resolveNodeDefinition(props);
-  const primaryFields = nodeDefinition.ui.fields.filter((field) => !field.advanced);
-  const advancedFields = nodeDefinition.ui.fields.filter((field) => Boolean(field.advanced));
+  const activeSubModelId = nodeDefinition.subModels?.[0]?.id ?? null;
+  const primaryFields = nodeDefinition.ui.fields.filter(
+    (field) =>
+      !field.advanced &&
+      isUiFieldVisibleForSubModel(field, activeSubModelId),
+  );
+  const advancedFields = nodeDefinition.ui.fields.filter(
+    (field) =>
+      Boolean(field.advanced) &&
+      isUiFieldVisibleForSubModel(field, activeSubModelId),
+  );
 
   return (
     <section

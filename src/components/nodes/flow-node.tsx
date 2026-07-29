@@ -5,6 +5,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   estimateCredits,
   getNode,
+  isUiFieldVisibleForSubModel,
   type HandleDescriptor,
   type UiField,
 } from "@/contracts";
@@ -245,8 +246,15 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
     );
   }
 
-  const primaryFields = def.ui.fields.filter((f) => !f.advanced);
-  const advancedFields = def.ui.fields.filter((f) => Boolean(f.advanced));
+  const primaryFields = def.ui.fields.filter(
+    (f) =>
+      !f.advanced && isUiFieldVisibleForSubModel(f, activeSubModelId),
+  );
+  const advancedFields = def.ui.fields.filter(
+    (f) =>
+      Boolean(f.advanced) &&
+      isUiFieldVisibleForSubModel(f, activeSubModelId),
+  );
   const inputByKey = new Map(
     def.ui.handles.inputs.map((h) => [h.id.replace(/^in:/, ""), h]),
   );

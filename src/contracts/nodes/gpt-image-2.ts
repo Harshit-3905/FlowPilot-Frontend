@@ -2,22 +2,49 @@ import { z } from "zod";
 import type { NodeDefinition } from "../node-definition";
 
 /**
- * GPT Image 2 — schema/UI only (no execution).
+ * GPT Image 2 — registry definition + stub provider id.
  * Shaped from Magica fixture `AI_Racing_Car_Generator_Copy.json` +
- * `docs/reference/node-inventory.md` (`gpt_image_2` UI shots).
+ * `docs/reference/screenshots/03-nodes/GPT_Image_2_*.png` +
+ * `docs/reference/node-inventory.md`.
  *
- * Primary: Prompt, Size, Quality, Number of Images.
+ * Modes: Text to Image | Image to Image (`subModels`).
+ * Primary (T2I): Prompt*, Size, Quality, Number of Images.
+ * Primary (I2I only): Image (`image_urls`, `subModelIds`).
  * Advanced (Settings): Background, Output Format, Output Compression.
+ * Output: Generated Images (`out:result`).
  */
+
+export const GPT_IMAGE_2_SIZES = [
+  "Auto",
+  "1024x1024",
+  "1536x1024",
+  "1024x1536",
+] as const;
+
+export const GPT_IMAGE_2_QUALITIES = [
+  "Auto",
+  "High",
+  "Medium",
+  "Low",
+] as const;
+
+export const GPT_IMAGE_2_BACKGROUNDS = [
+  "Auto",
+  "transparent",
+  "white",
+  "black",
+] as const;
+
+export const GPT_IMAGE_2_OUTPUT_FORMATS = ["PNG", "JPEG", "WEBP"] as const;
 
 export const GptImage2InputSchema = z.object({
   prompt: z.string().max(4000).default(""),
   image_urls: z.array(z.string()).nullable().default(null),
-  size: z.string().default("Auto"),
-  quality: z.string().default("High"),
+  size: z.enum(GPT_IMAGE_2_SIZES).default("Auto"),
+  quality: z.enum(GPT_IMAGE_2_QUALITIES).default("High"),
   n: z.number().int().min(1).max(10).default(1),
-  background: z.string().default("Auto"),
-  output_format: z.string().default("PNG"),
+  background: z.enum(GPT_IMAGE_2_BACKGROUNDS).default("Auto"),
+  output_format: z.enum(GPT_IMAGE_2_OUTPUT_FORMATS).default("PNG"),
   output_compression: z.number().int().min(0).max(100).default(80),
 });
 
@@ -25,7 +52,7 @@ export type GptImage2Input = z.infer<typeof GptImage2InputSchema>;
 
 /** Product output handle is `out:result` (Generated Images). */
 export const GptImage2OutputSchema = z.object({
-  result: z.array(z.string()).default([]),
+  result: z.array(z.string().url()).default([]),
 });
 
 export type GptImage2Output = z.infer<typeof GptImage2OutputSchema>;
@@ -90,31 +117,20 @@ export const gptImage2Definition = {
         control: "select" as const,
         label: "Size",
         default: "Auto",
-        options: [
-          { value: "Auto", label: "Auto" },
-          { value: "1024x1024", label: "1024×1024" },
-          { value: "1536x1024", label: "1536×1024" },
-          { value: "1024x1536", label: "1024×1536" },
-        ],
-      },
-      {
-        key: "image_urls",
-        control: "file" as const,
-        label: "Image URLs",
-        default: null,
-        advanced: true,
+        options: GPT_IMAGE_2_SIZES.map((value) => ({
+          value,
+          label: value === "Auto" ? "Auto" : value.replace("x", "×"),
+        })),
       },
       {
         key: "quality",
         control: "select" as const,
         label: "Quality",
         default: "High",
-        options: [
-          { value: "Auto", label: "Auto" },
-          { value: "High", label: "High" },
-          { value: "Medium", label: "Medium" },
-          { value: "Low", label: "Low" },
-        ],
+        options: GPT_IMAGE_2_QUALITIES.map((value) => ({
+          value,
+          label: value,
+        })),
       },
       {
         key: "n",
@@ -123,17 +139,30 @@ export const gptImage2Definition = {
         default: 1,
       },
       {
+        key: "image_urls",
+        control: "file" as const,
+        label: "Image",
+        default: null,
+        /** I2I only — hidden in Text to Image (matches T2I shots). */
+        subModelIds: ["gpt-image-2-edit"],
+      },
+      {
         key: "background",
         control: "select" as const,
         label: "Background",
         default: "Auto",
         advanced: true,
-        options: [
-          { value: "Auto", label: "Auto" },
-          { value: "transparent", label: "Transparent" },
-          { value: "white", label: "White" },
-          { value: "black", label: "Black" },
-        ],
+        options: GPT_IMAGE_2_BACKGROUNDS.map((value) => ({
+          value,
+          label:
+            value === "transparent"
+              ? "Transparent"
+              : value === "white"
+                ? "White"
+                : value === "black"
+                  ? "Black"
+                  : "Auto",
+        })),
       },
       {
         key: "output_format",
@@ -141,11 +170,10 @@ export const gptImage2Definition = {
         label: "Output Format",
         default: "PNG",
         advanced: true,
-        options: [
-          { value: "PNG", label: "PNG" },
-          { value: "JPEG", label: "JPEG" },
-          { value: "WEBP", label: "WEBP" },
-        ],
+        options: GPT_IMAGE_2_OUTPUT_FORMATS.map((value) => ({
+          value,
+          label: value,
+        })),
       },
       {
         key: "output_compression",
@@ -159,9 +187,9 @@ export const gptImage2Definition = {
       inputs: [
         { id: "in:prompt", label: "Prompt", dataType: "string" },
         { id: "in:size", label: "Size", dataType: "string" },
-        { id: "in:image_urls", label: "Image URLs", dataType: "image[]" },
         { id: "in:quality", label: "Quality", dataType: "string" },
         { id: "in:n", label: "Number of Images", dataType: "number" },
+        { id: "in:image_urls", label: "Image", dataType: "image[]" },
         { id: "in:background", label: "Background", dataType: "string" },
         { id: "in:output_format", label: "Output Format", dataType: "string" },
         {

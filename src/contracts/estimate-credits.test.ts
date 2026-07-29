@@ -30,6 +30,20 @@ describe("estimateCredits", () => {
     expect(estimateGptImage2Credits(input)).toBe(0.56);
   });
 
+  it("returns static gpt_5_5_pro estimate (~0.0001M)", () => {
+    expect(estimateCredits("gpt_5_5_pro", {})).toBe(0.0001);
+    expect(estimateCredits("gpt_5_5_pro", { prompt: "hi" })).toBe(0.0001);
+  });
+
+  it("returns static merge_videos estimate (~0.04M)", () => {
+    expect(estimateCredits("merge_videos", {})).toBe(0.04);
+    expect(
+      estimateCredits("merge_videos", {
+        videos: ["https://a.example/v1.mp4", "https://a.example/v2.mp4"],
+      }),
+    ).toBe(0.04);
+  });
+
   it("throws a clean error for unknown node type", () => {
     expect(() => estimateCredits("not_a_real_node", {})).toThrow(
       /Unknown node type: not_a_real_node/,
