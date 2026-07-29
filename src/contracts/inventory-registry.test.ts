@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 import { listNodes } from "./node-definition";
 
 /**
- * Machine inventory SSOT lives under docs/ (not duplicated in contracts).
- * Relative path is identical from frontend/src/contracts and backend/src/contracts.
+ * Machine inventory SSOT is duplicated in FE/BE `src/contracts/` (split-repo CI).
+ * Keep identical via `./scripts/check-contracts-sync.sh`. Human mirror: docs/reference/.
  */
 const inventoryPath = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../docs/reference/node-inventory.json",
+  "node-inventory.json",
 );
 
 const MANDATORY_TYPES = [
@@ -43,7 +43,7 @@ describe("inventory ↔ registry (06 Slice 7 equality)", () => {
     for (const type of registered) {
       expect(
         inventory.has(type),
-        `registered type "${type}" missing from docs/reference/node-inventory.json`,
+        `registered type "${type}" missing from contracts/node-inventory.json`,
       ).toBe(true);
     }
   });

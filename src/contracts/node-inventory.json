@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "ciPolicy": {
+    "slice1": "registry ⊆ inventory (every listNodes() type must appear here)",
+    "slice7": "inventory ⊆ registry (equality — every inventory type registered)"
+  },
+  "nodes": [
+    {
+      "type": "request",
+      "label": "Request Inputs",
+      "labelsAlt": ["Request-Inputs"],
+      "category": "io",
+      "palettePath": ["OTHERS", "Input"],
+      "sources": ["fixture:AI_Racing_Car_Generator_Copy.json", "screenshot:02-canvas"],
+      "status": "confirmed",
+      "notes": "dynamicFields; Playground maps these to run inputs; source handles are field_* ids"
+    },
+    {
+      "type": "response",
+      "label": "Response",
+      "category": "io",
+      "palettePath": ["OTHERS", "Input"],
+      "sources": ["fixture:AI_Racing_Car_Generator_Copy.json", "screenshot:03-nodes/Seedance_2.0_image_to_video_plus_Response.png"],
+      "status": "confirmed",
+      "notes": "sink; target handle result; UI slots keyed by upstream node type ids"
+    },
+    {
+      "type": "gpt_5_5_pro",
+      "label": "GPT 5.5 Pro",
+      "category": "text/llm",
+      "palettePath": ["OTHERS", "LLM Call"],
+      "sources": ["fixture:AI_Racing_Car_Generator_Copy.json", "screenshot:03-nodes/GPT_5.5_Pro.png"],
+      "status": "confirmed",
+      "notes": "Doc.md OpenRouter LLM — product leaf is gpt_5_5_pro; provider kind openrouter (free) in later slices; ~0.0001M"
+    },
+    {
+      "type": "gpt_image_2",
+      "label": "GPT Image 2",
+      "category": "image",
+      "palettePath": ["IMAGE", "Generate Image"],
+      "sources": ["fixture:AI_Racing_Car_Generator_Copy.json", "screenshot:03-nodes/GPT_Image_2_*.png"],
+      "status": "confirmed",
+      "notes": "modes Text to Image / Image to Image; subModels gpt-image-2-text / gpt-image-2-edit; ~0.21M"
+    },
+    {
+      "type": "seedance_2_0",
+      "label": "Seedance 2.0",
+      "category": "video",
+      "palettePath": ["VIDEO", "Generate Video"],
+      "sources": ["fixture:AI_Racing_Car_Generator_Copy.json", "screenshot:03-nodes/Seedance_2.0_image_to_video_plus_Response.png"],
+      "status": "confirmed",
+      "notes": "modes Text to Video / Image to Video; ~1.51M"
+    },
+    {
+      "type": "kling_v3_pro",
+      "label": "Kling v3 Pro",
+      "category": "video",
+      "palettePath": ["VIDEO", "Generate Video"],
+      "sources": ["screenshot:03-nodes/Kling_v3_Pro.png", "slug-inferred:snake_case(display)"],
+      "status": "confirmed",
+      "notes": "Doc.md Kling v3; modes Text to Video / Image to Video; ~0.84M; not in racing-car fixture"
+    },
+    {
+      "type": "merge_videos",
+      "label": "Merge Videos",
+      "category": "utility",
+      "palettePath": ["OTHERS", "Utility"],
+      "sources": ["screenshot:03-nodes/Merge_Videos.png", "slug-inferred:snake_case(display)"],
+      "status": "confirmed",
+      "notes": "Doc.md Merge Video; Videos* multi + Transition; out Merged Video; ~0.04M; FFmpeg real in Slice 6"
+    }
+  ],
+  "paletteCategories": [
+    {
+      "id": "IMAGE",
+      "subcategories": ["Generate Image", "Edit Image", "3D"]
+    },
+    {
+      "id": "VIDEO",
+      "subcategories": ["Generate Video", "Enhance Video", "BG Remover"]
+    },
+    {
+      "id": "AUDIO",
+      "subcategories": [
+        "Text to Speech",
+        "Music Generation",
+        "Sound Effects",
+        "Other Audio Tools"
+      ]
+    },
+    {
+      "id": "OTHERS",
+      "subcategories": ["Input", "Utility", "LLM Call"]
+    }
+  ],
+  "gaps": [
+    "Full palette leaf list under each subcategory not yet captured (screenshot:02-canvas/canvas_add_node_palette.png shows folders only)",
+    "OpenRouter-branded leaf (if distinct from gpt_5_5_pro) not in shots — treat gpt_5_5_pro as Doc.md LLM mandatory until proven otherwise",
+    "Additional IMAGE/VIDEO/AUDIO model leaves expected in product — append only from captures, never invent"
+  ]
+}
