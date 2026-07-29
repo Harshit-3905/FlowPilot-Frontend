@@ -7,6 +7,10 @@ import { apiFetch } from "@/lib/api-client";
 import { WorkflowDetailResponseSchema } from "@/contracts";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { NodePalette } from "@/components/node-palette";
+import {
+  WorkflowRunProvider,
+  useWorkflowRun,
+} from "@/components/workflow-run-context";
 import { useEditorStore, type WorkflowGraphDTO } from "@/store/editor-store";
 import { useAutoSave, type SaveStatus } from "@/hooks/use-auto-save";
 import { z } from "zod";
@@ -16,8 +20,17 @@ const PatchResponseSchema = z.object({ id: z.string() }).passthrough();
 type EditorTab = "playground" | "api" | "workflow";
 
 export function WorkflowEditor({ workflowId }: { workflowId: string }) {
+  return (
+    <WorkflowRunProvider workflowId={workflowId}>
+      <WorkflowEditorInner workflowId={workflowId} />
+    </WorkflowRunProvider>
+  );
+}
+
+function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const { getToken } = useAuth();
   const loadGraph = useEditorStore((s) => s.loadGraph);
+  const runCtx = useWorkflowRun();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [workflowName, setWorkflowName] = useState("Untitled Workflow");
@@ -98,6 +111,17 @@ export function WorkflowEditor({ workflowId }: { workflowId: string }) {
             className="min-w-0 flex-1 bg-transparent text-base font-semibold text-[var(--text)] outline-none"
           />
           <SaveIndicator status={saveStatus} />
+          {tab === "workflow" ? (
+            <button
+              type="button"
+              data-testid="workflow-play"
+              disabled={runCtx?.isBusy}
+              onClick={() => void runCtx?.runWorkflow()}
+              className="ml-2 shrink-0 rounded-md bg-[var(--accent-play)] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Play
+            </button>
+          ) : null}
         </div>
         <nav
           data-testid="workflow-tabs"
@@ -127,6 +151,7 @@ export function WorkflowEditor({ workflowId }: { workflowId: string }) {
             </button>
           ))}
         </nav>
+        <RunStatusBanner />
       </header>
 
       {tab === "workflow" ? (
@@ -210,5 +235,48 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
     >
       {label}
     </span>
+  );
+}
+
+function RunStatusBanner() {
+  const runCtx = useWorkflowRun();
+  if (!runCtx) return null;
+  const { status } = runCtx;
+  if (status.kind === "idle") return null;
+
+  if (status.kind === "starting") {
+    return (
+      <p
+        data-testid="run-status"
+        data-kind="starting"
+        className="mt-2 pb-2 text-xs text-[var(--text-muted)]"
+      >
+        Starting run…
+      </p>
+    );
+  }
+
+  if (status.kind === "started") {
+    return (
+      <p
+        data-testid="run-status"
+        data-kind="started"
+        data-run-id={status.runId}
+        className="mt-2 pb-2 text-xs text-[var(--success)]"
+      >
+        {status.message}
+      </p>
+    );
+  }
+
+  return (
+    <p
+      data-testid="run-status"
+      data-kind="error"
+      role="alert"
+      className="mt-2 pb-2 text-xs text-[var(--danger)]"
+    >
+      {status.message}
+    </p>
   );
 }

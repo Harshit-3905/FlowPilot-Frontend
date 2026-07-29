@@ -41,7 +41,7 @@ function renderFlowNode() {
 }
 
 describe("FlowNode on-node settings", () => {
-  it("renders label, Run stub, primary fields, and No output yet", () => {
+  it("renders label, Run (disabled without provider), primary fields, and No output yet", () => {
     const { node, getByText, getByTestId, getByLabelText } = renderFlowNode();
     expect(getByText("GPT Image 2")).toBeInTheDocument();
     expect(getByTestId(`flow-node-run-${node.id}`)).toBeDisabled();

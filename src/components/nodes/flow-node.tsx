@@ -8,6 +8,7 @@ import {
   type HandleDescriptor,
   type UiField,
 } from "@/contracts";
+import { useWorkflowRun } from "@/components/workflow-run-context";
 import { portCssVarForDataType } from "@/lib/port-colors";
 import { useEditorStore } from "@/store/editor-store";
 
@@ -217,6 +218,7 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
   const def = getNode(type ?? "");
   const updateNodeData = useEditorStore((s) => s.updateNodeData);
   const setActiveSubModel = useEditorStore((s) => s.setActiveSubModel);
+  const runCtx = useWorkflowRun();
   const liveData = useEditorStore(
     (s) => s.nodes.find((n) => n.id === id)?.data,
   );
@@ -392,7 +394,8 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
         <button
           type="button"
           data-testid={`flow-node-run-${id}`}
-          disabled
+          disabled={!runCtx || runCtx.isBusy}
+          onClick={() => void runCtx?.runNode(id)}
           className="nodrag nopan rounded-md bg-[var(--accent-run-node)] px-2.5 py-1 text-xs font-semibold text-[var(--text)] opacity-90 disabled:cursor-not-allowed"
         >
           Run
