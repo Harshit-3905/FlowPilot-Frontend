@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { MePanel } from "@/components/me-panel";
+import { NodeConfigForm } from "@/components/nodes/node-config-form";
 
 /** Minimal signed-in shell — header + /me probe (full Magica chrome later). */
 export function AppShell() {
@@ -47,6 +48,10 @@ export function AppShell() {
           Signed-in shell — canvas arrives in later slices.
         </p>
         <MePanel />
+        <section className="max-w-xl">
+          <h2 className="mb-2 text-base font-medium">Node UI Mapper Demo</h2>
+          <NodeConfigForm nodeType="gpt_image_2" showHandles />
+        </section>
       </main>
     </div>
   );

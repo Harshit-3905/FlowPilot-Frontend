@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { LandingPage } from "@/components/landing-page";
@@ -116,6 +117,22 @@ describe("AppShell (signed-in) + /me Authorization", () => {
     expect(lastAuthHeader).toBe(`Bearer ${TEST_TOKEN}`);
     expect(screen.getByTestId("me-id")).toHaveTextContent("user_db_1");
     expect(screen.getByTestId("me-email")).toHaveTextContent("test@flowpilot.dev");
+    expect(screen.getByTestId("node-config-form-gpt_image_2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Prompt")).toBeInTheDocument();
+    expect(screen.getByLabelText("Size")).toBeInTheDocument();
+    expect(screen.getByLabelText("Quality")).toBeInTheDocument();
+    expect(screen.getByLabelText("Number of Images")).toBeInTheDocument();
+    const advancedSection = screen.getByTestId("node-config-advanced");
+    expect(advancedSection).not.toHaveAttribute("open");
+
+    await userEvent.click(screen.getByText("Advanced"));
+
+    expect(advancedSection).toHaveAttribute("open");
+    expect(screen.getByLabelText("Background")).toBeInTheDocument();
+    expect(screen.getByLabelText("Output Format")).toBeInTheDocument();
+    expect(screen.getByLabelText("Output Compression")).toBeInTheDocument();
+    expect(screen.getByText("in:prompt")).toBeInTheDocument();
+    expect(screen.getByText("out:result")).toBeInTheDocument();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

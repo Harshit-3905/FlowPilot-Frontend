@@ -106,3 +106,19 @@ No `DATABASE_URL` on the frontend.
 ## CI
 
 GitHub Actions: `.github/workflows/ci.yml` — `pnpm test` + `pnpm build` with stub Clerk/API env (no real secrets required for smoke).
+
+## Contracts sync workflow
+
+`src/contracts/` in this repo must remain identical to `../backend/src/contracts/` (no package publish, no `file:` path dependency between repos).
+
+When you change contracts:
+
+1. Edit one side (`frontend/src/contracts/` **or** `backend/src/contracts/`)
+2. Copy the same changes to the other repo’s `src/contracts/`
+3. From workspace root (`Magica Work Trial/`), run:
+
+```bash
+./scripts/check-contracts-sync.sh
+```
+
+Local/dev note: this sync check runs from the shared workspace root, not from inside `frontend/` alone.
