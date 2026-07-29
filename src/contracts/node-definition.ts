@@ -121,8 +121,8 @@ export const CreditsMetadataSchema = z.union([
 export type NodeSubModel = {
   id: string;
   label: string;
-  input: z.ZodType<any>;
-  output: z.ZodType<any>;
+  input: z.ZodTypeAny;
+  output: z.ZodTypeAny;
 };
 
 export const NodeSubModelSchema = z.object({
@@ -140,8 +140,8 @@ export type NodeDefinition = {
   type: string;
   label: string;
   category: string;
-  input: z.ZodType<any>;
-  output: z.ZodType<any>;
+  input: z.ZodTypeAny;
+  output: z.ZodTypeAny;
   ui: NodeUi;
   credits?: CreditsMetadata;
   subModels?: NodeSubModel[];
