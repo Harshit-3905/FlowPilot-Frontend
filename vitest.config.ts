@@ -4,6 +4,9 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  css: {
+    postcss: {},
+  },
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],

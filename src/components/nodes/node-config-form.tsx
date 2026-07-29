@@ -109,11 +109,11 @@ export function NodeConfigForm(props: NodeConfigFormProps) {
   return (
     <section
       data-testid={`node-config-form-${nodeDefinition.type}`}
-      className="rounded-md border border-black/10 p-4 dark:border-white/10"
+      className="rounded-md border border-[var(--border)] bg-[var(--panel)] p-4"
     >
       <div className="mb-3">
-        <h2 className="text-base font-semibold">{nodeDefinition.label}</h2>
-        <p className="text-xs text-black/60 dark:text-white/60">{nodeDefinition.type}</p>
+        <h2 className="text-base font-semibold text-[var(--text)]">{nodeDefinition.label}</h2>
+        <p className="text-xs text-[var(--text-muted)]">{nodeDefinition.type}</p>
       </div>
 
       <form className="flex flex-col gap-3">
@@ -122,8 +122,8 @@ export function NodeConfigForm(props: NodeConfigFormProps) {
         ))}
 
         {advancedFields.length > 0 ? (
-          <details data-testid="node-config-advanced" className="rounded border border-black/10 p-3 dark:border-white/10">
-            <summary className="cursor-pointer text-sm font-medium">Advanced</summary>
+          <details data-testid="node-config-advanced" className="rounded border border-[var(--border)] p-3">
+            <summary className="cursor-pointer text-sm font-medium text-[var(--text)]">Advanced</summary>
             <div className="mt-3 flex flex-col gap-3">
               {advancedFields.map((field) => (
                 <NodeField key={field.key} field={field} />
@@ -134,8 +134,8 @@ export function NodeConfigForm(props: NodeConfigFormProps) {
       </form>
 
       {props.showHandles ? (
-        <div data-testid="node-config-handles" className="mt-4 text-xs text-black/70 dark:text-white/70">
-          <p className="font-medium">Handles</p>
+        <div data-testid="node-config-handles" className="mt-4 text-xs text-[var(--text-muted)]">
+          <p className="font-medium text-[var(--text)]">Handles</p>
           {nodeDefinition.ui.handles.inputs.map((handle) => (
             <p key={handle.id}>{handle.id}</p>
           ))}

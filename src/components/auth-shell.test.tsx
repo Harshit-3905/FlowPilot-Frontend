@@ -1,52 +1,16 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { LandingPage } from "@/components/landing-page";
 import { AppShell } from "@/components/app-shell";
-
-const API_URL = "http://localhost:3001";
-const TEST_TOKEN = "clerk-test-session-jwt";
 
 const { mockUseAuth, mockReplace } = vi.hoisted(() => ({
   mockUseAuth: vi.fn(),
   mockReplace: vi.fn(),
 }));
 
-let lastAuthHeader: string | null = null;
-
-const server = setupServer(
-  http.get(`${API_URL}/api/v1/me`, ({ request }) => {
-    lastAuthHeader = request.headers.get("Authorization");
-    if (lastAuthHeader !== `Bearer ${TEST_TOKEN}`) {
-      return HttpResponse.json(
-        { code: "unauthorized", message: "Missing or invalid token" },
-        { status: 401 },
-      );
-    }
-    return HttpResponse.json({ id: "user_db_1", email: "test@flowpilot.dev" });
-  }),
-);
-
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({ children }: { children: React.ReactNode }) => children,
-  SignInButton: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SignUpButton: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   UserButton: () => <div data-testid="user-button" />,
   useAuth: mockUseAuth,
-  Show: ({
-    when,
-    children,
-  }: {
-    when: "signed-in" | "signed-out";
-    children: React.ReactNode;
-  }) => {
-    const auth = mockUseAuth() as { isSignedIn?: boolean | null } | undefined;
-    const isSignedIn = Boolean(auth?.isSignedIn);
-    const show = when === "signed-in" ? isSignedIn : !isSignedIn;
-    return show ? <>{children}</> : null;
-  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -63,77 +27,53 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
+vi.mock("@xyflow/react", () => ({
+  ReactFlow: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="react-flow">{children}</div>
+  ),
+  MiniMap: () => <div data-testid="minimap" />,
+  Controls: () => <div data-testid="rf-controls" />,
+  Background: () => <div data-testid="rf-background" />,
+  BackgroundVariant: { Dots: "dots" },
+  applyNodeChanges: vi.fn((changes: unknown[], nodes: unknown[]) => nodes),
+  applyEdgeChanges: vi.fn((changes: unknown[], edges: unknown[]) => edges),
+  Handle: ({ id }: { id?: string }) => <div data-testid={`handle-${id}`} />,
+  Position: { Left: "left", Right: "right" },
+}));
+
 beforeAll(() => {
-  vi.stubEnv("NEXT_PUBLIC_API_URL", API_URL);
-  server.listen({ onUnhandledRequest: "error" });
+  vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:3001");
 });
 
 afterEach(() => {
-  lastAuthHeader = null;
-  server.resetHandlers();
   vi.clearAllMocks();
 });
 
 afterAll(() => {
-  server.close();
   vi.unstubAllEnvs();
 });
 
-describe("LandingPage (signed-out)", () => {
-  it("renders FlowPilot chrome and auth CTAs", () => {
-    mockUseAuth.mockReturnValue({
-      isLoaded: true,
-      isSignedIn: false,
-      userId: null,
-      getToken: async () => null,
-    });
-
-    render(<LandingPage />);
-
-    expect(screen.getByTestId("landing")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "FlowPilot" })).toBeInTheDocument();
-    expect(screen.getByTestId("sign-in")).toBeInTheDocument();
-    expect(screen.getByTestId("sign-up")).toBeInTheDocument();
-  });
-});
-
-describe("AppShell (signed-in) + /me Authorization", () => {
-  it("calls GET /api/v1/me with Authorization Bearer token", async () => {
+describe("AppShell (signed-in) — layout shell", () => {
+  it("renders header and children", () => {
     mockUseAuth.mockReturnValue({
       isLoaded: true,
       isSignedIn: true,
       userId: "user_clerk_1",
-      getToken: async () => TEST_TOKEN,
+      getToken: async () => "tok",
     });
 
-    render(<AppShell />);
+    render(
+      <AppShell>
+        <div data-testid="child-content">content</div>
+      </AppShell>,
+    );
 
     expect(screen.getByTestId("app-shell")).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByTestId("me-panel")).toBeInTheDocument();
-    });
-
-    expect(lastAuthHeader).toBe(`Bearer ${TEST_TOKEN}`);
-    expect(screen.getByTestId("me-id")).toHaveTextContent("user_db_1");
-    expect(screen.getByTestId("me-email")).toHaveTextContent("test@flowpilot.dev");
-    expect(screen.getByTestId("node-config-form-gpt_image_2")).toBeInTheDocument();
-    expect(screen.getByLabelText("Prompt")).toBeInTheDocument();
-    expect(screen.getByLabelText("Size")).toBeInTheDocument();
-    expect(screen.getByLabelText("Quality")).toBeInTheDocument();
-    expect(screen.getByLabelText("Number of Images")).toBeInTheDocument();
-    const advancedSection = screen.getByTestId("node-config-advanced");
-    expect(advancedSection).not.toHaveAttribute("open");
-
-    await userEvent.click(screen.getByText("Advanced"));
-
-    expect(advancedSection).toHaveAttribute("open");
-    expect(screen.getByLabelText("Background")).toBeInTheDocument();
-    expect(screen.getByLabelText("Output Format")).toBeInTheDocument();
-    expect(screen.getByLabelText("Output Compression")).toBeInTheDocument();
-    expect(screen.getByText("in:prompt")).toBeInTheDocument();
-    expect(screen.getByText("out:result")).toBeInTheDocument();
-    expect(mockReplace).not.toHaveBeenCalled();
+    const brand = screen.getByRole("link", { name: "FlowPilot" });
+    expect(brand).toBeInTheDocument();
+    expect(brand).toHaveAttribute("href", "/");
+    expect(screen.getByTestId("user-button")).toBeInTheDocument();
+    expect(screen.getByTestId("child-content")).toBeInTheDocument();
   });
 
   it("redirects to sign-in when session is gone", async () => {
@@ -148,8 +88,7 @@ describe("AppShell (signed-in) + /me Authorization", () => {
 
     expect(screen.getByTestId("app-shell-redirecting")).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/sign-in?redirect_url=%2Fapp");
+      expect(mockReplace).toHaveBeenCalledWith("/sign-in?redirect_url=%2F");
     });
-    expect(screen.queryByTestId("me-error")).not.toBeInTheDocument();
   });
 });

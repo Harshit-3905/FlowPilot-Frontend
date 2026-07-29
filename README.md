@@ -84,10 +84,11 @@ No `DATABASE_URL` on the frontend.
 
 ### Auth routes
 
-| Path   | Access                                                                                      |
-| :----- | :------------------------------------------------------------------------------------------ |
-| `/`    | Public landing (Sign in / Sign up)                                                          |
-| `/app` | Protected shell (Clerk middleware `auth.protect()`); loads `GET /api/v1/me` with Bearer JWT |
+| Path | Access |
+| :---- | :---- |
+| `/` | Protected workflows dashboard (Clerk `auth.protect()`); signed-out → `/sign-in` |
+| `/workflows/[id]` | Protected canvas editor |
+| `/sign-in`, `/sign-up` | Public Clerk auth pages; redirect to `/` on success |
 
 ## Scripts
 

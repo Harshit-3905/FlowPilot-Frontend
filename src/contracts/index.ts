@@ -37,6 +37,18 @@ export {
   type UiHandles,
 } from "./node-definition";
 export {
+  WorkflowGraphSchema,
+  CreateWorkflowResponseSchema,
+  ListWorkflowsResponseSchema,
+  WorkflowDetailResponseSchema,
+  UpdateWorkflowBodySchema,
+  type WorkflowGraph,
+  type CreateWorkflowResponse,
+  type ListWorkflowsResponse,
+  type WorkflowDetailResponse,
+  type UpdateWorkflowBody,
+} from "./workflow-dto";
+export {
   GptImage2InputSchema,
   GptImage2OutputSchema,
   estimateGptImage2Credits,

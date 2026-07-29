@@ -1,5 +1,10 @@
-import { LandingPage } from "@/components/landing-page";
+import { AppShell } from "@/components/app-shell";
+import { WorkflowsHome } from "@/components/workflows-home";
 
 export default function Home() {
-  return <LandingPage />;
+  return (
+    <AppShell>
+      <WorkflowsHome />
+    </AppShell>
+  );
 }
