@@ -263,7 +263,7 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
     return (
       <div
         data-testid={`flow-node-${id}`}
-        className="rounded-[var(--node-radius)] border border-[var(--border)] bg-[var(--panel)] p-3 shadow-sm"
+        className="flow-node-card rounded-[var(--node-radius)] border border-[var(--border)] bg-[var(--panel)] p-3"
         style={{ width: 380 }}
       >
         <span className="text-xs text-[var(--danger)]">Unknown: {type}</span>
@@ -444,7 +444,7 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
     <div
       data-testid={`flow-node-${id}`}
       data-status={statusChrome.dataStatus}
-      className={`rounded-[var(--node-radius)] border bg-[var(--panel)] shadow-sm ${statusChrome.rootClassName}`}
+      className={`flow-node-card rounded-[var(--node-radius)] border bg-[var(--panel)] ${statusChrome.rootClassName}`}
       style={{ width: "var(--node-width)" }}
     >
       <div

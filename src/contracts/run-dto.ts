@@ -44,6 +44,23 @@ export type StartWorkflowRunResponse = z.infer<
   typeof StartWorkflowRunResponseSchema
 >;
 
+/** Per-provider try outcome (matches Prisma AttemptOutcome). */
+export const AttemptOutcomeSchema = z.enum(["success", "failed", "timeout"]);
+
+export type AttemptOutcome = z.infer<typeof AttemptOutcomeSchema>;
+
+/** One provider try within a RunNode (failover chain / history debug). */
+export const RunNodeAttemptSchema = z.object({
+  id: z.string().optional(),
+  providerId: z.string().min(1),
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime().nullable(),
+  error: z.unknown().nullable().optional(),
+  outcome: AttemptOutcomeSchema,
+});
+
+export type RunNodeAttempt = z.infer<typeof RunNodeAttemptSchema>;
+
 export const RunNodeDetailSchema = z.object({
   id: z.string(),
   nodeId: z.string(),
@@ -52,7 +69,12 @@ export const RunNodeDetailSchema = z.object({
   input: z.unknown().nullable(),
   output: z.unknown().nullable(),
   error: z.unknown().nullable(),
+  /** 1-based count of provider tries performed (last attempt index). */
   attempt: z.number().int().positive(),
+  /** Ordered provider tries (empty until execution records them). */
+  attempts: z.array(RunNodeAttemptSchema).default([]),
+  /** Structured per-node logs for history/debug UI. */
+  logs: z.unknown().nullable().optional(),
   /** Actual cost in microcredits; null until node completes (or never ran). */
   costCredits: z.number().int().nonnegative().nullable(),
   /** Convenience M units (= costCredits / 1e6) when cost is present. */

@@ -22,6 +22,7 @@ const baseNode = (overrides: Partial<RunNodeDetail> = {}): RunNodeDetail => ({
   output: null,
   error: null,
   attempt: 1,
+  attempts: [],
   costCredits: null,
   startedAt: "2026-07-30T10:01:00.000Z",
   completedAt: null,

@@ -38,8 +38,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test
+      # L1: contracts Vitest + inventory equality + RTL/MSW
+      # L2 FE≡BE sync: run ./scripts/ci-l2-contracts.sh at trial workspace root
+      - name: Test (L1 contracts + RTL)
         run: pnpm test
 
       - name: Build
         run: pnpm build
+

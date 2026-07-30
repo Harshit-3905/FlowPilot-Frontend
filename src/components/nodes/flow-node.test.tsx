@@ -206,8 +206,77 @@ describe("FlowNode canvas live status", () => {
     } as NodeProps;
     rerender(<FlowNode {...props} />);
 
+    expect(getByTestId(`flow-node-${node.id}`)).toHaveAttribute(
+      "data-status",
+      "completed",
+    );
+    expect(getByTestId(`flow-node-${node.id}`).className).toContain(
+      "border-[var(--success)]",
+    );
     expect(
       getByTestId(`flow-node-output-${node.id}-download-0`),
     ).toHaveAttribute("href", url);
+  });
+
+  it("failed node keeps danger chrome while sibling stays completed", () => {
+    const ok = useEditorStore.getState().addNode("gpt_image_2", { x: 0, y: 0 })!;
+    const bad = useEditorStore
+      .getState()
+      .addNode("gpt_image_2", { x: 200, y: 0 })!;
+    useHistoryStore.setState({
+      liveRunId: "run_partial",
+      liveNodeStatuses: {
+        [ok.id]: "completed",
+        [bad.id]: "failed",
+      },
+    });
+
+    const baseProps = {
+      selected: false,
+      dragging: false,
+      zIndex: 0,
+      selectable: true,
+      deletable: true,
+      draggable: true,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+    };
+
+    const { getByTestId } = render(
+      <>
+        <FlowNode
+          {...({
+            ...baseProps,
+            id: ok.id,
+            type: ok.type,
+            data: ok.data,
+          } as NodeProps)}
+        />
+        <FlowNode
+          {...({
+            ...baseProps,
+            id: bad.id,
+            type: bad.type,
+            data: bad.data,
+          } as NodeProps)}
+        />
+      </>,
+    );
+
+    expect(getByTestId(`flow-node-${ok.id}`)).toHaveAttribute(
+      "data-status",
+      "completed",
+    );
+    expect(getByTestId(`flow-node-${ok.id}`).className).toContain(
+      "border-[var(--success)]",
+    );
+    expect(getByTestId(`flow-node-${bad.id}`)).toHaveAttribute(
+      "data-status",
+      "failed",
+    );
+    expect(getByTestId(`flow-node-${bad.id}`).className).toContain(
+      "border-[var(--danger)]",
+    );
   });
 });

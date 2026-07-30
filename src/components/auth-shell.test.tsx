@@ -1,10 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { AppShell } from "@/components/app-shell";
 
-const { mockUseAuth, mockReplace } = vi.hoisted(() => ({
+const { mockUseAuth, mockReplace, mockPathname } = vi.hoisted(() => ({
   mockUseAuth: vi.fn(),
   mockReplace: vi.fn(),
+  mockPathname: vi.fn(() => "/"),
 }));
 
 vi.mock("@clerk/nextjs", () => ({
@@ -15,16 +16,23 @@ vi.mock("@clerk/nextjs", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace, push: vi.fn() }),
+  usePathname: () => mockPathname(),
 }));
 
 vi.mock("next/link", () => ({
   default: ({
     children,
     href,
+    ...rest
   }: {
     children: React.ReactNode;
     href: string;
-  }) => <a href={href}>{children}</a>,
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -46,7 +54,9 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  cleanup();
   vi.clearAllMocks();
+  mockPathname.mockReturnValue("/");
 });
 
 afterAll(() => {
@@ -54,7 +64,7 @@ afterAll(() => {
 });
 
 describe("AppShell (signed-in) — layout shell", () => {
-  it("renders header and children", () => {
+  it("renders icon rail and children", () => {
     mockUseAuth.mockReturnValue({
       isLoaded: true,
       isSignedIn: true,
@@ -69,11 +79,34 @@ describe("AppShell (signed-in) — layout shell", () => {
     );
 
     expect(screen.getByTestId("app-shell")).toBeInTheDocument();
+    expect(screen.getByTestId("app-rail")).toBeInTheDocument();
     const brand = screen.getByRole("link", { name: "FlowPilot" });
     expect(brand).toBeInTheDocument();
     expect(brand).toHaveAttribute("href", "/");
+    const apiKeysNav = screen.getByTestId("nav-api-keys");
+    expect(apiKeysNav).toHaveAttribute("href", "/settings/api-keys");
     expect(screen.getByTestId("user-button")).toBeInTheDocument();
     expect(screen.getByTestId("child-content")).toBeInTheDocument();
+    expect(screen.queryByTestId("rail-add-node")).not.toBeInTheDocument();
+  });
+
+  it("shows add/search rail actions on editor routes only", () => {
+    mockPathname.mockReturnValue("/workflows/wf_1");
+    mockUseAuth.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      userId: "user_clerk_1",
+      getToken: async () => "tok",
+    });
+
+    render(
+      <AppShell>
+        <div data-testid="child-content">editor</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByTestId("rail-add-node")).toBeInTheDocument();
+    expect(screen.getByTestId("rail-search-nodes")).toBeInTheDocument();
   });
 
   it("redirects to sign-in when session is gone", async () => {

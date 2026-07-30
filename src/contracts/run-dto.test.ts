@@ -19,6 +19,7 @@ describe("RunNodeDetailSchema", () => {
       output: null,
       error: null,
       attempt: 1,
+      attempts: [],
       costCredits: 210_000,
       costDisplayM: 0.21,
       startedAt: "2026-07-30T10:00:00.000Z",
@@ -43,6 +44,52 @@ describe("RunNodeDetailSchema", () => {
       completedAt: "2026-07-30T10:00:01.000Z",
     });
     expect(parsed.costCredits).toBeNull();
+    expect(parsed.attempts).toEqual([]);
+  });
+
+  it("accepts attempts[] + optional logs for provider failover", () => {
+    const parsed = RunNodeDetailSchema.parse({
+      id: "rn_3",
+      nodeId: "n3",
+      nodeType: "gpt_image_2",
+      status: "completed",
+      input: { prompt: "x" },
+      output: { result: ["https://example.com/a.png"] },
+      error: null,
+      attempt: 2,
+      attempts: [
+        {
+          providerId: "stub.fail_first",
+          startedAt: "2026-07-30T10:00:00.000Z",
+          endedAt: "2026-07-30T10:00:00.100Z",
+          error: { message: "provider down" },
+          outcome: "failed",
+        },
+        {
+          id: "att_2",
+          providerId: "stub.gpt_image_2",
+          startedAt: "2026-07-30T10:00:00.100Z",
+          endedAt: "2026-07-30T10:00:00.200Z",
+          error: null,
+          outcome: "success",
+        },
+      ],
+      logs: [
+        {
+          at: "2026-07-30T10:00:00.000Z",
+          level: "error",
+          message: "provider down",
+          providerId: "stub.fail_first",
+        },
+      ],
+      costCredits: 420_000,
+      startedAt: "2026-07-30T10:00:00.000Z",
+      completedAt: "2026-07-30T10:00:00.200Z",
+    });
+    expect(parsed.attempts).toHaveLength(2);
+    expect(parsed.attempts[0]?.outcome).toBe("failed");
+    expect(parsed.attempts[1]?.outcome).toBe("success");
+    expect(parsed.logs).toBeTruthy();
   });
 });
 

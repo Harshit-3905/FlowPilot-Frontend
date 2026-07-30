@@ -10,19 +10,19 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { ApiError } from "@/lib/api-client";
 import {
   startNodeRun,
   startWorkflowRun,
   subscribeAfterStart,
 } from "@/lib/start-run";
+import { formatRunStartError } from "@/lib/run-start-error";
 import { useHistoryStore } from "@/store/history-store";
 
 export type RunUiStatus =
   | { kind: "idle" }
   | { kind: "starting" }
   | { kind: "started"; runId: string; message: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; code?: string };
 
 type WorkflowRunContextValue = {
   workflowId: string;
@@ -122,13 +122,12 @@ export function WorkflowRunProvider({
 
   const handleError = useCallback((err: unknown, generation: number) => {
     if (generationRef.current !== generation) return;
-    const message =
-      err instanceof ApiError
-        ? err.message
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    setStatus({ kind: "error", message });
+    const formatted = formatRunStartError(err);
+    setStatus({
+      kind: "error",
+      message: formatted.message,
+      code: formatted.code,
+    });
   }, []);
 
   const runWorkflow = useCallback(async () => {

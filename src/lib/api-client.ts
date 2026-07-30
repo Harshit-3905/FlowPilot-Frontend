@@ -66,6 +66,11 @@ export async function apiFetch<T>(
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
+  // 204 No Content has no body; avoid JSON parse so callers can use z.null().
+  if (res.status === 204) {
+    return options.schema.parse(null);
+  }
+
   const json: unknown = await res.json().catch(() => null);
 
   if (!res.ok) {

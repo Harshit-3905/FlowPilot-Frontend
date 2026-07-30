@@ -49,6 +49,9 @@ vi.mock("@xyflow/react", () => ({
   ),
   MiniMap: () => <div data-testid="minimap" />,
   Controls: () => <div data-testid="rf-controls" />,
+  Panel: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="rf-panel">{children}</div>
+  ),
   Background: () => <div data-testid="rf-background" />,
   BackgroundVariant: { Dots: "dots" },
   Handle: ({ id }: { id?: string }) => <div data-testid={`handle-${id}`} />,
@@ -182,6 +185,7 @@ const server = setupServer(
             output: null,
             error: null,
             attempt: 1,
+            attempts: [],
             costCredits: null,
             startedAt: null,
             completedAt: null,
@@ -289,6 +293,7 @@ describe("FE run triggers (Slice 8)", () => {
                 output: null,
                 error: null,
                 attempt: 1,
+                attempts: [],
                 costCredits: null,
                 startedAt: null,
                 completedAt: null,
@@ -364,6 +369,50 @@ describe("FE run triggers (Slice 8)", () => {
       const banner = getByTestId("run-status");
       expect(banner).toHaveAttribute("data-kind", "error");
       expect(banner).toHaveTextContent("You do not own this workflow");
+    });
+  });
+
+  it("402 insufficient_credits surfaces clear banner with need/have M", async () => {
+    server.use(
+      http.post("http://localhost:3001/api/v1/workflows/:id/runs", () =>
+        HttpResponse.json(
+          {
+            code: "insufficient_credits",
+            message: "Insufficient credits: need 1720000 microcredits, have 0",
+            details: {
+              balance: 0,
+              required: 1_720_000,
+              displayM: { balance: 0, required: 1.72 },
+            },
+          },
+          { status: 402 },
+        ),
+      ),
+    );
+
+    const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
+    await waitFor(() =>
+      expect(getByTestId("workflow-editor")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(getByTestId("workflow-play"));
+
+    await waitFor(() => {
+      const banner = getByTestId("run-status");
+      expect(banner).toHaveAttribute("data-kind", "error");
+      expect(banner).toHaveAttribute("data-code", "insufficient_credits");
+      expect(getByTestId("run-status-message")).toHaveTextContent(
+        "Insufficient credits",
+      );
+      expect(getByTestId("run-status-message")).toHaveTextContent("1.72 M");
+      expect(getByTestId("run-status-message")).toHaveTextContent("0.00 M");
+    });
+
+    fireEvent.click(getByTestId("run-status-dismiss"));
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="run-status"]'),
+      ).toBeNull();
     });
   });
 

@@ -12,9 +12,12 @@ import { http, HttpResponse } from "msw";
 import {
   HistorySidebar,
   formatDuration,
+  formatLogsBody,
   formatTimestamp,
   formatJsonSummary,
+  hasLogEntries,
   nodeErrorMessage,
+  normalizeLogEntries,
 } from "./history-sidebar";
 import {
   historyFixtures,
@@ -221,10 +224,81 @@ describe("HistorySidebar", () => {
       '[data-testid="run-detail-node-error"]',
     );
     expect(errorSlot).toBeTruthy();
-    expect(errorSlot).toHaveTextContent("Stub provider rejected request");
+    expect(errorSlot).toHaveTextContent("All providers failed");
   });
 
-  it("MSW historyHandlers serve GET /runs/:id detail fixture", async () => {
+  it("rich failure fixture shows attempts table, input, error, and expandable logs", async () => {
+    render(<HistorySidebar workflowId="wf_1" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("history-list")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("history-run-run_hist_failed"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("run-detail-node-rn_fail_err")).toBeInTheDocument(),
+    );
+
+    const failed = screen.getByTestId("run-detail-node-rn_fail_err");
+
+    expect(
+      failed.querySelector('[data-testid="run-detail-node-input"]'),
+    ).toHaveTextContent('"prompt"');
+    expect(
+      failed.querySelector('[data-testid="run-detail-node-input"]'),
+    ).toHaveTextContent("durationSec");
+
+    expect(
+      failed.querySelector('[data-testid="run-detail-node-error"]'),
+    ).toHaveTextContent("All providers failed");
+
+    const attempts = failed.querySelector(
+      '[data-testid="run-detail-node-attempts"]',
+    );
+    expect(attempts).toBeTruthy();
+
+    const attempt0 = screen.getByTestId("run-detail-attempt-0");
+    expect(attempt0).toHaveAttribute("data-provider", "stub.kling_v3_pro");
+    expect(attempt0).toHaveAttribute("data-outcome", "timeout");
+    expect(
+      attempt0.querySelector('[data-testid="run-detail-attempt-outcome"]'),
+    ).toHaveTextContent("timeout");
+    expect(screen.getByTestId("run-detail-attempt-0-time")).toHaveTextContent(
+      "500ms",
+    );
+    expect(screen.getByTestId("run-detail-attempt-0-error")).toHaveTextContent(
+      "Provider timed out waiting for webhook",
+    );
+
+    const attempt1 = screen.getByTestId("run-detail-attempt-1");
+    expect(attempt1).toHaveAttribute("data-provider", "stub.kling_fallback");
+    expect(attempt1).toHaveAttribute("data-outcome", "failed");
+    expect(screen.getByTestId("run-detail-attempt-1-error")).toHaveTextContent(
+      "Stub provider rejected request",
+    );
+
+    const logsPanel = screen.getByTestId("run-detail-node-logs");
+    expect(logsPanel).toBeInTheDocument();
+    expect(logsPanel).not.toHaveAttribute("open");
+    expect(logsPanel).toHaveTextContent(/Logs \(4\)/);
+
+    fireEvent.click(logsPanel.querySelector("summary")!);
+    expect(logsPanel).toHaveAttribute("open");
+    const logsBody = screen.getByTestId("run-detail-node-logs-body");
+    expect(logsBody).toHaveTextContent("Trying provider stub.kling_v3_pro");
+    expect(logsBody).toHaveTextContent("timed out");
+    expect(logsBody).toHaveTextContent("Stub provider rejected request");
+
+    // Successful prior node has no attempts / logs panels.
+    const ok = screen.getByTestId("run-detail-node-rn_fail_ok");
+    expect(
+      ok.querySelector('[data-testid="run-detail-node-attempts"]'),
+    ).toBeNull();
+    expect(ok.querySelector('[data-testid="run-detail-node-logs"]')).toBeNull();
+  });
+
+  it("MSW historyHandlers serve GET /runs/:id rich failure fixture", async () => {
     const standalone = setupServer(...historyHandlers);
     standalone.listen({ onUnhandledRequest: "error" });
     try {
@@ -234,10 +308,17 @@ describe("HistorySidebar", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as typeof runDetailFixtures.run_hist_failed;
       expect(body.nodes).toHaveLength(2);
-      expect(body.nodes[1]!.status).toBe("failed");
-      expect(body.nodes[1]!.error).toEqual({
-        message: "Stub provider rejected request",
+      const failed = body.nodes[1]!;
+      expect(failed.status).toBe("failed");
+      expect(failed.error).toEqual({
+        code: "PROVIDER_FAILED",
+        message: "All providers failed",
       });
+      expect(failed.attempts).toHaveLength(2);
+      expect(failed.attempts[0]!.outcome).toBe("timeout");
+      expect(failed.attempts[1]!.outcome).toBe("failed");
+      expect(Array.isArray(failed.logs)).toBe(true);
+      expect((failed.logs as unknown[]).length).toBe(4);
     } finally {
       standalone.close();
     }
@@ -438,5 +519,39 @@ describe("nodeErrorMessage", () => {
     expect(nodeErrorMessage(null)).toBeNull();
     expect(nodeErrorMessage({ message: "boom" })).toBe("boom");
     expect(nodeErrorMessage("raw")).toBe("raw");
+  });
+});
+
+describe("hasLogEntries / normalizeLogEntries / formatLogsBody", () => {
+  it("detects empty vs present logs", () => {
+    expect(hasLogEntries(null)).toBe(false);
+    expect(hasLogEntries([])).toBe(false);
+    expect(hasLogEntries("")).toBe(false);
+    expect(hasLogEntries([{ message: "x" }])).toBe(true);
+    expect(hasLogEntries("line")).toBe(true);
+  });
+
+  it("formats structured log lines for the logs panel", () => {
+    const logs = [
+      {
+        at: "2026-07-30T10:02:01.500Z",
+        level: "info",
+        message: "Trying provider stub.a",
+        providerId: "stub.a",
+      },
+      {
+        at: "2026-07-30T10:02:02.000Z",
+        level: "error",
+        message: "timed out",
+        providerId: "stub.a",
+      },
+    ];
+    expect(normalizeLogEntries(logs)).toHaveLength(2);
+    const body = formatLogsBody(logs);
+    expect(body).toContain("INFO");
+    expect(body).toContain("[stub.a]");
+    expect(body).toContain("Trying provider stub.a");
+    expect(body).toContain("ERROR");
+    expect(body).toContain("timed out");
   });
 });

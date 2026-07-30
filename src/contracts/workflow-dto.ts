@@ -60,3 +60,10 @@ export const UpdateWorkflowBodySchema = z
   });
 
 export type UpdateWorkflowBody = z.infer<typeof UpdateWorkflowBodySchema>;
+
+/** `DELETE /api/v1/workflows/:id` → 204 No Content (empty body → null). */
+export const DeleteWorkflowResponseSchema = z.null();
+
+export type DeleteWorkflowResponse = z.infer<
+  typeof DeleteWorkflowResponseSchema
+>;

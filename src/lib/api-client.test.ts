@@ -72,4 +72,20 @@ describe("apiFetch / fetchMe", () => {
       message: "Invalid token",
     } satisfies Partial<ApiError>);
   });
+
+  it("parses 204 No Content as null", async () => {
+    const { z } = await import("zod");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
+    const result = await apiFetch("/api/v1/workflows/wf_1", {
+      getToken: async () => "tok",
+      fetch: fetchMock as unknown as typeof fetch,
+      method: "DELETE",
+      schema: z.null(),
+    });
+
+    expect(result).toBeNull();
+  });
 });

@@ -7,7 +7,9 @@ import {
   RunHistoryListResponseSchema,
   getNode,
   runScopeLabel,
+  type AttemptOutcome,
   type RunHistoryEntry,
+  type RunNodeAttempt,
   type RunNodeDetail,
   type RunStatus,
 } from "@/contracts";
@@ -287,10 +289,13 @@ function RunNodeRow({ node }: { node: RunNodeDetail }) {
     node.costCredits != null
       ? `${formatDisplayM(toDisplayM(node.costDisplayM, node.costCredits))} M`
       : null;
+  const attempts = node.attempts ?? [];
+  const hasLogs = hasLogEntries(node.logs);
 
   return (
     <li
       data-testid={`run-detail-node-${node.id}`}
+      data-node-id={node.nodeId}
       data-status={node.status}
       className="space-y-1.5 px-3 py-2.5"
     >
@@ -312,7 +317,10 @@ function RunNodeRow({ node }: { node: RunNodeDetail }) {
       <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
         <span data-testid="run-detail-node-time">{formatDuration(timing)}</span>
         <span aria-hidden>·</span>
-        <span>attempt {node.attempt}</span>
+        <span>
+          attempt {node.attempt}
+          {attempts.length > 0 ? ` (${attempts.length})` : ""}
+        </span>
         {costLabel ? (
           <>
             <span aria-hidden>·</span>
@@ -334,6 +342,10 @@ function RunNodeRow({ node }: { node: RunNodeDetail }) {
         />
       </div>
 
+      {attempts.length > 0 ? (
+        <AttemptsTable attempts={attempts} />
+      ) : null}
+
       {node.status === "failed" ? (
         <p
           data-testid="run-detail-node-error"
@@ -343,8 +355,175 @@ function RunNodeRow({ node }: { node: RunNodeDetail }) {
           {errorMsg ?? "Error"}
         </p>
       ) : null}
+
+      {hasLogs ? <NodeLogsPanel logs={node.logs} /> : null}
     </li>
   );
+}
+
+function AttemptsTable({ attempts }: { attempts: RunNodeAttempt[] }) {
+  return (
+    <div data-testid="run-detail-node-attempts">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+        Attempts
+      </p>
+      <div className="mt-0.5 overflow-x-auto rounded border border-[var(--border)]">
+        <table className="w-full min-w-[220px] border-collapse text-left text-[10px]">
+          <thead>
+            <tr className="border-b border-[var(--border)] bg-[var(--panel)] text-[var(--text-muted)]">
+              <th className="px-1.5 py-1 font-medium">Provider</th>
+              <th className="px-1.5 py-1 font-medium">Outcome</th>
+              <th className="px-1.5 py-1 font-medium">Time</th>
+              <th className="px-1.5 py-1 font-medium">Error</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border)]">
+            {attempts.map((attempt, index) => {
+              const rowKey = attempt.id ?? `${attempt.providerId}-${index}`;
+              const duration = nodeDurationMs(
+                attempt.startedAt,
+                attempt.endedAt,
+              );
+              const attemptError = nodeErrorMessage(attempt.error ?? null);
+              return (
+                <tr
+                  key={rowKey}
+                  data-testid={`run-detail-attempt-${index}`}
+                  data-outcome={attempt.outcome}
+                  data-provider={attempt.providerId}
+                >
+                  <td className="max-w-[7rem] truncate px-1.5 py-1 font-mono text-[var(--text)]">
+                    {attempt.providerId}
+                  </td>
+                  <td className="px-1.5 py-1">
+                    <AttemptOutcomeBadge outcome={attempt.outcome} />
+                  </td>
+                  <td
+                    data-testid={`run-detail-attempt-${index}-time`}
+                    className="whitespace-nowrap px-1.5 py-1 text-[var(--text-muted)]"
+                  >
+                    {formatDuration(duration)}
+                  </td>
+                  <td
+                    data-testid={`run-detail-attempt-${index}-error`}
+                    className="max-w-[8rem] truncate px-1.5 py-1 text-[var(--danger)]"
+                    title={attemptError ?? undefined}
+                  >
+                    {attemptError ?? "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AttemptOutcomeBadge({ outcome }: { outcome: AttemptOutcome }) {
+  return (
+    <span
+      data-testid="run-detail-attempt-outcome"
+      data-outcome={outcome}
+      className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${attemptOutcomeClass(outcome)}`}
+    >
+      {outcome}
+    </span>
+  );
+}
+
+function attemptOutcomeClass(outcome: AttemptOutcome): string {
+  switch (outcome) {
+    case "success":
+      return "bg-[color-mix(in_srgb,var(--success)_18%,white)] text-[var(--success)]";
+    case "timeout":
+      return "bg-[color-mix(in_srgb,var(--accent-play)_14%,white)] text-[var(--accent-play)]";
+    case "failed":
+    default:
+      return "bg-[color-mix(in_srgb,var(--danger)_14%,white)] text-[var(--danger)]";
+  }
+}
+
+function NodeLogsPanel({ logs }: { logs: unknown }) {
+  const entries = normalizeLogEntries(logs);
+  return (
+    <details
+      data-testid="run-detail-node-logs"
+      className="rounded border border-[var(--border)] bg-[var(--panel)]"
+    >
+      <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+        Logs{entries.length > 0 ? ` (${entries.length})` : ""}
+      </summary>
+      <pre
+        data-testid="run-detail-node-logs-body"
+        className="max-h-28 overflow-auto border-t border-[var(--border)] px-2 py-1.5 font-mono text-[10px] leading-snug text-[var(--text)]"
+      >
+        {formatLogsBody(logs)}
+      </pre>
+    </details>
+  );
+}
+
+export function hasLogEntries(logs: unknown): boolean {
+  if (logs == null) return false;
+  if (Array.isArray(logs)) return logs.length > 0;
+  if (typeof logs === "string") return logs.trim().length > 0;
+  if (typeof logs === "object") return Object.keys(logs).length > 0;
+  return true;
+}
+
+type NormalizedLogEntry = {
+  at?: string;
+  level?: string;
+  message: string;
+  providerId?: string;
+};
+
+export function normalizeLogEntries(logs: unknown): NormalizedLogEntry[] {
+  if (!Array.isArray(logs)) return [];
+  const out: NormalizedLogEntry[] = [];
+  for (const entry of logs) {
+    if (typeof entry === "string") {
+      out.push({ message: entry });
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const obj = entry as Record<string, unknown>;
+      const message =
+        typeof obj.message === "string"
+          ? obj.message
+          : formatJsonSummary(entry);
+      out.push({
+        at: typeof obj.at === "string" ? obj.at : undefined,
+        level: typeof obj.level === "string" ? obj.level : undefined,
+        message,
+        providerId:
+          typeof obj.providerId === "string" ? obj.providerId : undefined,
+      });
+    }
+  }
+  return out;
+}
+
+export function formatLogsBody(logs: unknown): string {
+  if (logs == null) return "—";
+  if (typeof logs === "string") return logs;
+  const entries = normalizeLogEntries(logs);
+  if (entries.length > 0) {
+    return entries
+      .map((e) => {
+        const parts = [
+          e.at ? e.at : null,
+          e.level ? e.level.toUpperCase() : null,
+          e.providerId ? `[${e.providerId}]` : null,
+          e.message,
+        ].filter(Boolean);
+        return parts.join(" ");
+      })
+      .join("\n");
+  }
+  return formatJsonSummary(logs);
 }
 
 function JsonField({

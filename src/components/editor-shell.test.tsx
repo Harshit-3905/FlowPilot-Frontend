@@ -1,13 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { WorkflowEditor } from "./workflow-editor";
 import { useEditorStore } from "@/store/editor-store";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import {
-  creditsFixtures,
-  creditsHandlers,
-} from "@/test/msw-handlers";
+import { creditsHandlers, creditsFixtures } from "@/test/msw-handlers";
 
 const server = setupServer(
   http.get("http://localhost:3001/api/v1/workflows/:id/runs", () =>
@@ -72,40 +78,61 @@ vi.mock("@xyflow/react", () => ({
   addEdge: vi.fn((edge: unknown, edges: unknown[]) => [...edges, edge]),
 }));
 
-beforeEach(() => {
+beforeAll(() => {
   vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:3001");
-  useEditorStore.setState({ nodes: [], edges: [] });
   server.listen({ onUnhandledRequest: "error" });
+});
+
+beforeEach(() => {
+  useEditorStore.setState({ nodes: [], edges: [] });
 });
 
 afterEach(() => {
   server.resetHandlers();
-  server.close();
   cleanup();
+});
+
+afterAll(() => {
+  server.close();
   vi.unstubAllEnvs();
 });
 
-describe("WorkflowEditor tabs", () => {
-  it("defaults to Workflow tab with canvas and history sidebar (no inspector)", async () => {
+describe("Canvas chrome (13C)", () => {
+  it("renders editor chrome", async () => {
     const { getByTestId, queryByTestId } = render(
       <WorkflowEditor workflowId="wf_1" />,
     );
-    await waitFor(() => expect(getByTestId("workflow-editor")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(getByTestId("workflow-editor")).toBeInTheDocument(),
+    );
+    expect(getByTestId("workflow-editor-header")).toBeInTheDocument();
+    expect(getByTestId("workflow-title-pill")).toBeInTheDocument();
+    expect(getByTestId("workflow-back")).toHaveAttribute("href", "/");
+    expect(getByTestId("workflow-canvas")).toBeInTheDocument();
+    expect(getByTestId("palette-open")).toBeInTheDocument();
+    expect(getByTestId("history-toggle")).toBeInTheDocument();
+    expect(getByTestId("workflow-play")).toBeInTheDocument();
+    expect(getByTestId("canvas-zoom-controls")).toBeInTheDocument();
+    expect(getByTestId("canvas-center-dock")).toBeInTheDocument();
+    expect(getByTestId("canvas-minimap-toggle")).toBeInTheDocument();
+    expect(queryByTestId("node-palette")).not.toBeInTheDocument();
+    expect(queryByTestId("history-sidebar")).not.toBeInTheDocument();
+  });
+
+  it("defaults to Workflow tab; switches Playground and API", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <WorkflowEditor workflowId="wf_1" />,
+    );
+    await waitFor(() =>
+      expect(getByTestId("workflow-editor")).toBeInTheDocument(),
+    );
     expect(getByTestId("workflow-tab-workflow")).toHaveAttribute(
       "data-active",
       "true",
     );
-    expect(getByTestId("workflow-canvas")).toBeInTheDocument();
-    expect(getByTestId("history-sidebar")).toBeInTheDocument();
+    expect(getByTestId("workflow-tab-playground")).toBeInTheDocument();
+    expect(getByTestId("workflow-tab-api")).toBeInTheDocument();
     expect(queryByTestId("node-inspector")).not.toBeInTheDocument();
-    expect(getByTestId("workflow-back")).toHaveAttribute("href", "/");
-  });
-
-  it("switches to Playground and API placeholders", async () => {
-    const { getByTestId, queryByTestId } = render(
-      <WorkflowEditor workflowId="wf_1" />,
-    );
-    await waitFor(() => expect(getByTestId("workflow-editor")).toBeInTheDocument());
 
     fireEvent.click(getByTestId("workflow-tab-playground"));
     expect(getByTestId("playground-panel")).toBeInTheDocument();
@@ -114,28 +141,39 @@ describe("WorkflowEditor tabs", () => {
     fireEvent.click(getByTestId("workflow-tab-api"));
     expect(getByTestId("api-panel")).toBeInTheDocument();
   });
-});
 
-describe("WorkflowEditor credits chrome (08 Slice 4)", () => {
-  it("shows Est and Bal from credits APIs in the header", async () => {
+  it("opens history from clock and palette from +", async () => {
     const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
     await waitFor(() =>
       expect(getByTestId("workflow-editor")).toBeInTheDocument(),
     );
+    fireEvent.click(getByTestId("history-toggle"));
+    expect(getByTestId("history-sidebar")).toBeInTheDocument();
+    fireEvent.click(getByTestId("palette-open"));
+    expect(getByTestId("node-palette")).toBeInTheDocument();
+    expect(getByTestId("palette-cat-IMAGE")).toBeInTheDocument();
+    expect(getByTestId("palette-cat-VIDEO")).toBeInTheDocument();
+    expect(getByTestId("palette-cat-AUDIO")).toBeInTheDocument();
+    expect(getByTestId("palette-cat-OTHERS")).toBeInTheDocument();
+    expect(getByTestId("palette-search")).toHaveAttribute(
+      "placeholder",
+      "Search nodes or models...",
+    );
+  });
 
+  it("shows Est/Bal and opens history on Play", async () => {
+    const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
     await waitFor(() => {
-      expect(getByTestId("credits-chrome")).toBeInTheDocument();
       expect(getByTestId("credits-est")).toHaveTextContent("Est 1.72 M");
       expect(getByTestId("credits-bal")).toHaveTextContent("Bal 10.00 M");
     });
-
     expect(getByTestId("credits-est")).toHaveAttribute(
       "data-value",
       String(creditsFixtures.estimate.displayM),
     );
-    expect(getByTestId("credits-bal")).toHaveAttribute(
-      "data-value",
-      String(creditsFixtures.balance.displayM),
+    fireEvent.click(getByTestId("workflow-play"));
+    await waitFor(() =>
+      expect(getByTestId("history-sidebar")).toBeInTheDocument(),
     );
   });
 
@@ -194,5 +232,14 @@ describe("WorkflowEditor credits chrome (08 Slice 4)", () => {
     await waitFor(() => {
       expect(estimateCalls).toBeGreaterThan(afterLoad);
     });
+  });
+
+  it("opens palette from AppShell rail event", async () => {
+    const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
+    await waitFor(() =>
+      expect(getByTestId("workflow-editor")).toBeInTheDocument(),
+    );
+    window.dispatchEvent(new Event("flowpilot:open-palette"));
+    expect(getByTestId("node-palette")).toBeInTheDocument();
   });
 });

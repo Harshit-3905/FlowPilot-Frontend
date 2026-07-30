@@ -92,6 +92,7 @@ export const runDetailFixtures = {
         output: { url: "https://cdn.example/cat.png" },
         error: null,
         attempt: 1,
+        attempts: [],
         costCredits: 210_000,
         costDisplayM: 0.21,
         startedAt: "2026-07-30T10:00:01.000Z",
@@ -120,6 +121,7 @@ export const runDetailFixtures = {
         output: { url: "https://cdn.example/ok.png" },
         error: null,
         attempt: 1,
+        attempts: [],
         costCredits: 210_000,
         costDisplayM: 0.21,
         startedAt: "2026-07-30T10:02:00.500Z",
@@ -130,10 +132,64 @@ export const runDetailFixtures = {
         nodeId: "node_bad",
         nodeType: "kling_v3_pro",
         status: "failed" as const,
-        input: { prompt: "bad" },
+        input: { prompt: "bad", durationSec: 8 },
         output: null,
-        error: { message: "Stub provider rejected request" },
-        attempt: 1,
+        error: {
+          code: "PROVIDER_FAILED",
+          message: "All providers failed",
+        },
+        attempt: 2,
+        attempts: [
+          {
+            id: "att_fail_1",
+            providerId: "stub.kling_v3_pro",
+            startedAt: "2026-07-30T10:02:01.500Z",
+            endedAt: "2026-07-30T10:02:02.000Z",
+            error: {
+              code: "PROVIDER_TIMEOUT",
+              message: "Provider timed out waiting for webhook",
+            },
+            outcome: "timeout" as const,
+          },
+          {
+            id: "att_fail_2",
+            providerId: "stub.kling_fallback",
+            startedAt: "2026-07-30T10:02:02.000Z",
+            endedAt: "2026-07-30T10:02:03.000Z",
+            error: {
+              code: "PROVIDER_FAILED",
+              message: "Stub provider rejected request",
+            },
+            outcome: "failed" as const,
+          },
+        ],
+        logs: [
+          {
+            at: "2026-07-30T10:02:01.500Z",
+            level: "info",
+            message: "Trying provider stub.kling_v3_pro (attempt 1/2)",
+            providerId: "stub.kling_v3_pro",
+          },
+          {
+            at: "2026-07-30T10:02:02.000Z",
+            level: "error",
+            message:
+              "Provider stub.kling_v3_pro timed out — trying next in chain",
+            providerId: "stub.kling_v3_pro",
+          },
+          {
+            at: "2026-07-30T10:02:02.000Z",
+            level: "info",
+            message: "Trying provider stub.kling_fallback (attempt 2/2)",
+            providerId: "stub.kling_fallback",
+          },
+          {
+            at: "2026-07-30T10:02:03.000Z",
+            level: "error",
+            message: "Stub provider rejected request",
+            providerId: "stub.kling_fallback",
+          },
+        ],
         costCredits: null,
         startedAt: "2026-07-30T10:02:01.500Z",
         completedAt: "2026-07-30T10:02:03.000Z",
@@ -220,6 +276,7 @@ export const historyHandlers = [
             output: null,
             error: null,
             attempt: 1,
+            attempts: [],
             costCredits: null,
             startedAt: "2026-07-30T10:01:00.000Z",
             completedAt: null,
@@ -268,6 +325,7 @@ export const runHandlers = [
             output: null,
             error: null,
             attempt: 1,
+            attempts: [],
             costCredits: null,
             startedAt: null,
             completedAt: null,
@@ -287,6 +345,84 @@ export const runHandlers = [
   }),
 ];
 
+/** GET/POST/DELETE /api/v1/api-keys (doc 10 Slice 6). */
+export const apiKeyFixtures = {
+  list: {
+    keys: [
+      {
+        id: "key_active",
+        name: "Production",
+        prefix: "fp_abcd12",
+        createdAt: "2026-07-30T10:00:00.000Z",
+        revokedAt: null,
+      },
+      {
+        id: "key_revoked",
+        name: "Old",
+        prefix: "fp_oldkey",
+        createdAt: "2026-07-29T10:00:00.000Z",
+        revokedAt: "2026-07-30T09:00:00.000Z",
+      },
+    ],
+  },
+  created: {
+    id: "key_new",
+    name: "Staging",
+    key: "fp_only_shown_once_secret_value",
+    prefix: "fp_only_s",
+  },
+};
+
+let apiKeysStore = structuredClone(apiKeyFixtures.list.keys);
+
+export function resetApiKeysMswState() {
+  apiKeysStore = structuredClone(apiKeyFixtures.list.keys);
+}
+
+export const apiKeysHandlers = [
+  http.get(`${BASE}/api/v1/api-keys`, () => {
+    return HttpResponse.json({ keys: apiKeysStore });
+  }),
+
+  http.post(`${BASE}/api/v1/api-keys`, async ({ request }) => {
+    const body = (await request.json()) as { name?: string };
+    const name = body.name?.trim() || "Untitled";
+    const created = {
+      ...apiKeyFixtures.created,
+      name,
+      id: `key_${Date.now()}`,
+    };
+    apiKeysStore = [
+      {
+        id: created.id,
+        name: created.name,
+        prefix: created.prefix,
+        createdAt: "2026-07-30T12:00:00.000Z",
+        revokedAt: null,
+      },
+      ...apiKeysStore,
+    ];
+    return HttpResponse.json(
+      {
+        id: created.id,
+        name: created.name,
+        key: apiKeyFixtures.created.key,
+        prefix: created.prefix,
+      },
+      { status: 201 },
+    );
+  }),
+
+  http.delete(`${BASE}/api/v1/api-keys/:id`, ({ params }) => {
+    const id = params.id as string;
+    const now = "2026-07-30T12:30:00.000Z";
+    apiKeysStore = apiKeysStore.map((k) =>
+      k.id === id ? { ...k, revokedAt: now } : k,
+    );
+    return HttpResponse.json({ id, revokedAt: now });
+  }),
+];
+
 export const workflowHandlers = [
   http.get(`${BASE}/api/v1/workflows`, () => {
     return HttpResponse.json({ workflows: workflowFixtures.list });
@@ -303,6 +439,24 @@ export const workflowHandlers = [
     });
   }),
 
+  http.patch(`${BASE}/api/v1/workflows/:id`, async ({ params, request }) => {
+    const body = (await request.json()) as {
+      name?: string;
+      graph?: unknown;
+    };
+    return HttpResponse.json({
+      ...workflowFixtures.detail,
+      id: params.id as string,
+      name: body.name ?? workflowFixtures.detail.name,
+      graph: body.graph ?? workflowFixtures.detail.graph,
+    });
+  }),
+
+  http.delete(`${BASE}/api/v1/workflows/:id`, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   ...creditsHandlers,
   ...runHandlers,
+  ...apiKeysHandlers,
 ];

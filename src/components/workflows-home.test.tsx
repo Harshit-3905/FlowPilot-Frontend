@@ -10,7 +10,7 @@ import {
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
-import { WorkflowsHome } from "@/components/workflows-home";
+import { WorkflowsHome, formatEditedAgo } from "@/components/workflows-home";
 import { workflowHandlers, workflowFixtures } from "@/test/msw-handlers";
 
 // ── mocks ──────────────────────────────────────────────────────────────────
@@ -48,7 +48,51 @@ afterAll(() => {
 
 // ── tests ───────────────────────────────────────────────────────────────────
 
+describe("formatEditedAgo", () => {
+  it("formats relative Edited … ago copy", () => {
+    const now = Date.parse("2026-07-29T10:36:00.000Z");
+    expect(formatEditedAgo("2026-07-29T10:00:00.000Z", now)).toBe(
+      "Edited 36m ago",
+    );
+    expect(formatEditedAgo("2026-07-29T10:35:30.000Z", now)).toBe(
+      "Edited just now",
+    );
+  });
+});
+
 describe("WorkflowsHome", () => {
+  it("renders Magica home chrome: title, System + Your sections, search, Import/Add", async () => {
+    render(<WorkflowsHome />);
+
+    expect(screen.getByRole("heading", { name: "FlowPilot" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Build workflows or run models directly"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("import-workflow-btn")).toHaveTextContent("Import");
+    expect(screen.getByTestId("new-workflow-btn")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "System Workflows" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Prebuilt workflow templates - click to open and start using."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Your Workflows" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Open one to edit, run, and review history."),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("workflows-search")).toHaveAttribute(
+      "placeholder",
+      "Search workflows...",
+    );
+    expect(screen.getByTestId("system-workflow-card-sys_racing")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("workflows-list")).toBeInTheDocument();
+    });
+  });
+
   it("renders multiple distinct workflow cards from MSW list", async () => {
     expect(workflowFixtures.list.length).toBeGreaterThanOrEqual(2);
 
@@ -72,6 +116,19 @@ describe("WorkflowsHome", () => {
     );
   });
 
+  it("filters Your Workflows by search", async () => {
+    render(<WorkflowsHome />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workflows-list")).toBeInTheDocument(),
+    );
+
+    await userEvent.type(screen.getByTestId("workflows-search"), "Image");
+
+    expect(screen.getByTestId("workflow-card-wf_2")).toBeInTheDocument();
+    expect(screen.queryByTestId("workflow-card-wf_1")).not.toBeInTheDocument();
+  });
+
   it("navigates each card to its own canvas route", async () => {
     render(<WorkflowsHome />);
 
@@ -90,7 +147,7 @@ describe("WorkflowsHome", () => {
     expect(mockPush).toHaveBeenCalledWith("/workflows/wf_2");
   });
 
-  it("New Workflow button POSTs and navigates to new workflow", async () => {
+  it("Add (+) button POSTs and navigates to new workflow", async () => {
     render(<WorkflowsHome />);
 
     await waitFor(() =>
@@ -119,5 +176,45 @@ describe("WorkflowsHome", () => {
     await waitFor(() => {
       expect(screen.getByTestId("workflows-empty")).toBeInTheDocument();
     });
+  });
+
+  it("deletes a workflow after modal confirm", async () => {
+    render(<WorkflowsHome />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-card-wf_1")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByTestId("delete-workflow-wf_1"));
+
+    expect(screen.getByTestId("delete-workflow-modal")).toBeInTheDocument();
+    expect(screen.getByTestId("delete-workflow-modal")).toHaveTextContent(
+      /My First Workflow/,
+    );
+
+    await userEvent.click(screen.getByTestId("delete-workflow-modal-confirm"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("workflow-card-wf_1")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("workflow-card-wf_2")).toBeInTheDocument();
+  });
+
+  it("keeps workflow when delete modal is cancelled", async () => {
+    render(<WorkflowsHome />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-card-wf_1")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByTestId("delete-workflow-wf_1"));
+    await userEvent.click(screen.getByTestId("delete-workflow-modal-cancel"));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("delete-workflow-modal"),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("workflow-card-wf_1")).toBeInTheDocument();
   });
 });

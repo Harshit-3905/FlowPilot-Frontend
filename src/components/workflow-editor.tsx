@@ -40,9 +40,12 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const [loading, setLoading] = useState(true);
   const [workflowName, setWorkflowName] = useState("Untitled Workflow");
   const [tab, setTab] = useState<EditorTab>("workflow");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const saveStatus = useAutoSave(workflowId, getToken);
 
   const handlePlay = useCallback(async () => {
+    setHistoryOpen(true);
     // Refresh Est/Bal immediately before run (Slice 4); BE block is Slice 5.
     await refreshCredits();
     await runCtx?.runWorkflow();
@@ -78,6 +81,13 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       .finally(() => setLoading(false));
   }, [workflowId, getToken, loadGraph]);
 
+  useEffect(() => {
+    const openPalette = () => setPaletteOpen(true);
+    window.addEventListener("flowpilot:open-palette", openPalette);
+    return () =>
+      window.removeEventListener("flowpilot:open-palette", openPalette);
+  }, []);
+
   if (loading) {
     return (
       <div
@@ -105,23 +115,38 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       data-testid="workflow-editor"
       className="flex flex-1 flex-col overflow-hidden bg-[var(--bg)]"
     >
-      <header className="shrink-0 border-b border-[var(--border)] bg-[var(--panel)] px-4 pt-3">
+      <header
+        data-testid="workflow-editor-header"
+        className="shrink-0 border-b border-[var(--border)] bg-[var(--panel)] px-3 pt-2.5"
+      >
         <div className="flex items-center gap-2">
           <Link
             href="/"
             data-testid="workflow-back"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--panel)] text-[var(--text-muted)] shadow-[var(--shadow-soft)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
             aria-label="Back to workflows"
           >
-            ←
+            <BackIcon />
           </Link>
-          <input
-            data-testid="workflow-name-input"
-            value={workflowName}
-            onChange={(e) => handleRename(e.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-base font-semibold text-[var(--text)] outline-none"
-          />
-          <SaveIndicator status={saveStatus} />
+          <div
+            data-testid="workflow-title-pill"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5 shadow-[var(--shadow-soft)]"
+          >
+            <input
+              data-testid="workflow-name-input"
+              value={workflowName}
+              onChange={(e) => handleRename(e.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[var(--text)] outline-none"
+            />
+            <span
+              aria-hidden
+              className="shrink-0 text-[var(--text-muted)] opacity-60"
+              data-testid="workflow-title-edit-affordance"
+            >
+              <PencilIcon />
+            </span>
+            <SaveIndicator status={saveStatus} />
+          </div>
           <CreditsChrome
             estimateM={credits.estimateM}
             balanceM={credits.balanceM}
@@ -134,11 +159,26 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               data-testid="workflow-play"
               disabled={runCtx?.isBusy}
               onClick={() => void handlePlay()}
-              className="ml-2 shrink-0 rounded-md bg-[var(--accent-play)] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+              aria-label="Play workflow"
+              className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[var(--accent-play)] text-white shadow-[var(--shadow-soft)] disabled:opacity-60"
             >
-              Play
+              <PlayIcon />
             </button>
           ) : null}
+          <button
+            type="button"
+            data-testid="history-toggle"
+            aria-label={historyOpen ? "Hide history" : "Show history"}
+            aria-pressed={historyOpen}
+            onClick={() => setHistoryOpen((v) => !v)}
+            className={
+              historyOpen
+                ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] shadow-[var(--shadow-soft)]"
+                : "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--border)] bg-[var(--panel)] text-[var(--text-muted)] shadow-[var(--shadow-soft)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
+            }
+          >
+            <HistoryClockIcon />
+          </button>
         </div>
         <nav
           data-testid="workflow-tabs"
@@ -172,12 +212,15 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       </header>
 
       {tab === "workflow" ? (
-        <div className="flex flex-1 overflow-hidden">
-          <NodePalette />
-          <div className="flex-1">
-            <WorkflowCanvas />
+        <div className="relative flex flex-1 overflow-hidden">
+          <div className="relative min-w-0 flex-1">
+            <WorkflowCanvas onOpenPalette={() => setPaletteOpen(true)} />
+            <NodePalette
+              open={paletteOpen}
+              onClose={() => setPaletteOpen(false)}
+            />
           </div>
-          <HistorySidebar workflowId={workflowId} />
+          {historyOpen ? <HistorySidebar workflowId={workflowId} /> : null}
         </div>
       ) : null}
 
@@ -287,14 +330,102 @@ function RunStatusBanner() {
     );
   }
 
+  const isCredits = status.code === "insufficient_credits";
+
   return (
-    <p
+    <div
       data-testid="run-status"
       data-kind="error"
+      data-code={status.code ?? "error"}
       role="alert"
-      className="mt-2 pb-2 text-xs text-[var(--danger)]"
+      className={
+        isCredits
+          ? "mt-2 mb-1 flex items-start justify-between gap-3 rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_8%,white)] px-3 py-2 text-xs text-[var(--danger)]"
+          : "mt-2 pb-2 text-xs text-[var(--danger)]"
+      }
     >
-      {status.message}
-    </p>
+      <p data-testid="run-status-message" className="min-w-0 flex-1">
+        {isCredits ? (
+          <>
+            <span className="font-semibold">Insufficient credits. </span>
+            {status.message.replace(/^Insufficient credits:\s*/i, "")}
+          </>
+        ) : (
+          status.message
+        )}
+      </p>
+      {isCredits ? (
+        <button
+          type="button"
+          data-testid="run-status-dismiss"
+          onClick={runCtx.clearStatus}
+          className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text)]"
+        >
+          Dismiss
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M8.5 3L4.5 7L8.5 11"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+      <path
+        d="M8.5 1.5l2 2L4 10H2V8L8.5 1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path d="M4 2.5v9l8-4.5L4 2.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HistoryClockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle
+        cx="8"
+        cy="8"
+        r="5.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M8 5v3.2L10 10"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.5 4.5A6.5 6.5 0 0 1 8 2.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
