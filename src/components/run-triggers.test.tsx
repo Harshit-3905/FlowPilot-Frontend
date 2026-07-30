@@ -6,7 +6,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { render, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { WorkflowEditor } from "./workflow-editor";
 import { FlowNode } from "@/components/nodes/flow-node";
 import {
@@ -14,9 +14,10 @@ import {
   useWorkflowRun,
 } from "@/components/workflow-run-context";
 import { useEditorStore } from "@/store/editor-store";
+import { useHistoryStore } from "@/store/history-store";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { runFixtures } from "@/test/msw-handlers";
+import { runFixtures, creditsHandlers } from "@/test/msw-handlers";
 import type { NodeProps } from "@xyflow/react";
 
 const { mockGetToken } = vi.hoisted(() => ({
@@ -60,12 +61,33 @@ vi.mock("@xyflow/react", () => ({
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
   readonly url: string;
+  closed = false;
+  private readonly listeners = new Map<
+    string,
+    Set<(ev: MessageEvent) => void>
+  >();
+
   constructor(url: string) {
     this.url = url;
     FakeEventSource.instances.push(this);
   }
-  addEventListener() {}
-  close() {}
+
+  addEventListener(type: string, listener: (ev: MessageEvent) => void) {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(listener);
+    this.listeners.set(type, set);
+  }
+
+  close() {
+    this.closed = true;
+  }
+
+  dispatch(type: string, data: unknown) {
+    const event = { data: JSON.stringify(data) } as MessageEvent;
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
 }
 
 /** Minimal status mirror so FlowNode-only tests can assert banner state. */
@@ -97,6 +119,9 @@ function RunStatusProbe() {
 }
 
 const server = setupServer(
+  http.get("http://localhost:3001/api/v1/workflows/:id/runs", () =>
+    HttpResponse.json({ runs: [] }),
+  ),
   http.get("http://localhost:3001/api/v1/workflows/:id", () =>
     HttpResponse.json({
       id: "wf_1",
@@ -157,6 +182,7 @@ const server = setupServer(
             output: null,
             error: null,
             attempt: 1,
+            costCredits: null,
             startedAt: null,
             completedAt: null,
           },
@@ -172,11 +198,13 @@ const server = setupServer(
       expiresAt: "2026-07-29T12:10:00.000Z",
     }),
   ),
+  ...creditsHandlers,
 );
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:3001");
   useEditorStore.setState({ nodes: [], edges: [] });
+  useHistoryStore.getState().reset();
   mockGetToken.mockResolvedValue("test-token");
   FakeEventSource.instances = [];
   vi.stubGlobal("EventSource", FakeEventSource);
@@ -261,6 +289,7 @@ describe("FE run triggers (Slice 8)", () => {
                 output: null,
                 error: null,
                 attempt: 1,
+                costCredits: null,
                 startedAt: null,
                 completedAt: null,
               },
@@ -413,6 +442,66 @@ describe("FE run triggers (Slice 8)", () => {
     await waitFor(() => {
       expect(getByTestId("run-probe")).toHaveAttribute("data-busy", "false");
     });
+  });
+
+  it("Play seeds history store and SSE events update list status", async () => {
+    const { getByTestId } = render(
+      <WorkflowRunProvider workflowId="wf_1">
+        <RunStatusProbe />
+        <PlayProbe />
+      </WorkflowRunProvider>,
+    );
+
+    fireEvent.click(getByTestId("probe-play"));
+
+    await waitFor(() => {
+      expect(getByTestId("run-status")).toHaveAttribute("data-kind", "started");
+      expect(
+        useHistoryStore
+          .getState()
+          .runs.some((r) => r.id === runFixtures.workflowRunId),
+      ).toBe(true);
+    });
+
+    const source = FakeEventSource.instances[0]!;
+    expect(source).toBeTruthy();
+
+    act(() => {
+      source.dispatch("run.completed", {
+        type: "run.completed",
+        runId: runFixtures.workflowRunId,
+        status: "completed",
+        at: "2026-07-30T12:00:05.000Z",
+      });
+    });
+
+    await waitFor(() => {
+      const entry = useHistoryStore
+        .getState()
+        .runs.find((r) => r.id === runFixtures.workflowRunId);
+      expect(entry?.status).toBe("completed");
+    });
+  });
+
+  it("unmount closes EventSource subscription", async () => {
+    const { getByTestId, unmount } = render(
+      <WorkflowRunProvider workflowId="wf_1">
+        <RunStatusProbe />
+        <PlayProbe />
+      </WorkflowRunProvider>,
+    );
+
+    fireEvent.click(getByTestId("probe-play"));
+
+    await waitFor(() => {
+      expect(FakeEventSource.instances.length).toBeGreaterThan(0);
+      expect(getByTestId("run-probe")).toHaveAttribute("data-busy", "false");
+    });
+
+    const source = FakeEventSource.instances[0]!;
+    expect(source.closed).toBe(false);
+    unmount();
+    expect(source.closed).toBe(true);
   });
 });
 

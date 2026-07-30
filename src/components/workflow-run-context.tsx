@@ -16,6 +16,7 @@ import {
   startWorkflowRun,
   subscribeAfterStart,
 } from "@/lib/start-run";
+import { useHistoryStore } from "@/store/history-store";
 
 export type RunUiStatus =
   | { kind: "idle" }
@@ -80,7 +81,12 @@ export function WorkflowRunProvider({
   }, [workflowId, resetRunState]);
 
   const afterStart = useCallback(
-    async (runId: string, label: string, generation: number) => {
+    async (
+      runId: string,
+      label: string,
+      generation: number,
+      scope: "workflow" | "node",
+    ) => {
       if (generationRef.current !== generation) return;
       setLastRunId(runId);
       setStatus({
@@ -88,12 +94,17 @@ export function WorkflowRunProvider({
         runId,
         message: `${label} started (${runId})`,
       });
+      useHistoryStore.getState().ensureRunningEntry({
+        id: runId,
+        workflowId,
+        scope,
+      });
       try {
         subCloseRef.current?.();
         const sub = await subscribeAfterStart(runId, {
           getToken,
-          log: (msg, event) => {
-            console.log(msg, event);
+          onEvent: (event) => {
+            useHistoryStore.getState().applyRealtimeEvent(event);
           },
         });
         if (generationRef.current !== generation) {
@@ -102,11 +113,11 @@ export function WorkflowRunProvider({
         }
         subCloseRef.current = sub.close;
       } catch (err) {
-        // Subscribe is optional for Slice 8 — run already started.
+        // Subscribe is optional — run already started; history still has optimistic entry.
         console.warn("subscribeAfterStart failed", err);
       }
     },
-    [getToken],
+    [getToken, workflowId],
   );
 
   const handleError = useCallback((err: unknown, generation: number) => {
@@ -128,7 +139,7 @@ export function WorkflowRunProvider({
     setStatus({ kind: "starting" });
     try {
       const { runId } = await startWorkflowRun(workflowId, { getToken });
-      await afterStart(runId, "Workflow run", generation);
+      await afterStart(runId, "Workflow run", generation, "workflow");
     } catch (err) {
       handleError(err, generation);
     } finally {
@@ -151,7 +162,7 @@ export function WorkflowRunProvider({
           { workflowId, nodeId },
           { getToken },
         );
-        await afterStart(runId, "Node run", generation);
+        await afterStart(runId, "Node run", generation, "node");
       } catch (err) {
         handleError(err, generation);
       } finally {

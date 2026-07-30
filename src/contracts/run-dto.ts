@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+export const RunStatusSchema = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export type RunStatus = z.infer<typeof RunStatusSchema>;
+
+/**
+ * Full DAG vs single-node run (matches realtime `run.started` scope).
+ * Selected-group / subgraph runs are not supported yet — keep `workflow` | `node` only
+ * until product + create-run + Prisma add `group`.
+ */
+export const RunScopeSchema = z.enum(["workflow", "node"]);
+
+export type RunScope = z.infer<typeof RunScopeSchema>;
+
+/** History sidebar scope copy (Galaxy/Magica: Workflow | Node). */
+export const RUN_SCOPE_LABELS = {
+  workflow: "Workflow",
+  node: "Node",
+} as const satisfies Record<RunScope, string>;
+
+export function runScopeLabel(scope: RunScope): string {
+  return RUN_SCOPE_LABELS[scope];
+}
+
 export const StartNodeRunBodySchema = z.object({
   workflowId: z.string().min(1),
   nodeId: z.string().min(1),
@@ -19,11 +48,15 @@ export const RunNodeDetailSchema = z.object({
   id: z.string(),
   nodeId: z.string(),
   nodeType: z.string(),
-  status: z.enum(["queued", "running", "completed", "failed", "cancelled"]),
+  status: RunStatusSchema,
   input: z.unknown().nullable(),
   output: z.unknown().nullable(),
   error: z.unknown().nullable(),
   attempt: z.number().int().positive(),
+  /** Actual cost in microcredits; null until node completes (or never ran). */
+  costCredits: z.number().int().nonnegative().nullable(),
+  /** Convenience M units (= costCredits / 1e6) when cost is present. */
+  costDisplayM: z.number().optional(),
   startedAt: z.string().datetime().nullable(),
   completedAt: z.string().datetime().nullable(),
 });
@@ -33,7 +66,7 @@ export type RunNodeDetail = z.infer<typeof RunNodeDetailSchema>;
 export const RunDetailSchema = z.object({
   id: z.string(),
   workflowId: z.string(),
-  status: z.enum(["queued", "running", "completed", "failed", "cancelled"]),
+  status: RunStatusSchema,
   triggerRunId: z.string().nullable(),
   error: z.unknown().nullable(),
   createdAt: z.string().datetime(),
@@ -49,3 +82,27 @@ export const RunDetailResponseSchema = z.object({
 });
 
 export type RunDetailResponse = z.infer<typeof RunDetailResponseSchema>;
+
+/**
+ * History sidebar list entry: timestamp + status + duration + scope (+ ids).
+ * `createdAt` is the list timestamp; `durationMs` when the run has completedAt.
+ */
+export const RunHistoryEntrySchema = z.object({
+  id: z.string(),
+  workflowId: z.string(),
+  status: RunStatusSchema,
+  scope: RunScopeSchema,
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+});
+
+export type RunHistoryEntry = z.infer<typeof RunHistoryEntrySchema>;
+
+export const RunHistoryListResponseSchema = z.object({
+  runs: z.array(RunHistoryEntrySchema),
+});
+
+export type RunHistoryListResponse = z.infer<
+  typeof RunHistoryListResponseSchema
+>;

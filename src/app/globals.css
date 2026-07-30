@@ -48,3 +48,22 @@ body {
   color: var(--text);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+/* Canvas live status — running pulse (doc 07 Slice 5) */
+@keyframes flow-node-running-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.04),
+      0 0 0 0 color-mix(in srgb, var(--accent-play) 35%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.04),
+      0 0 0 4px color-mix(in srgb, var(--accent-play) 22%, transparent);
+  }
+}
+
+.flow-node--status-running {
+  animation: flow-node-running-pulse 1.4s ease-in-out infinite;
+}

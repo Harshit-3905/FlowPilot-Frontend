@@ -48,7 +48,7 @@ export async function startNodeRun(
 
 /**
  * Optional post-start subscribe: Clerk → short-lived token → EventSource.
- * History UI is doc 07; this only keeps the SSE channel alive / logs.
+ * Doc 07 history store consumes `onEvent` for live list/detail updates.
  */
 export async function subscribeAfterStart(
   runId: string,

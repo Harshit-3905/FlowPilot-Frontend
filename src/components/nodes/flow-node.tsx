@@ -10,8 +10,19 @@ import {
   type UiField,
 } from "@/contracts";
 import { useWorkflowRun } from "@/components/workflow-run-context";
+import { AssetLinks } from "@/components/asset-links";
+import { canvasNodeStatusChrome } from "@/lib/canvas-node-status";
+import {
+  extractAssetUrls,
+  isLikelyImageUrl,
+} from "@/lib/asset-urls";
 import { portCssVarForDataType } from "@/lib/port-colors";
 import { useEditorStore } from "@/store/editor-store";
+import {
+  selectLiveNodeOutput,
+  selectLiveNodeStatus,
+  useHistoryStore,
+} from "@/store/history-store";
 
 const HANDLE_SIZE = 10;
 
@@ -215,6 +226,17 @@ function creditLabel(type: string, inputs: Record<string, unknown>): string | nu
   }
 }
 
+function formatNodeOutputSummary(value: unknown): string {
+  if (value == null) return "—";
+  try {
+    const text = JSON.stringify(value);
+    if (text.length <= 160) return text;
+    return `${text.slice(0, 157)}…`;
+  } catch {
+    return String(value);
+  }
+}
+
 export function FlowNode({ id, type, data: propData }: NodeProps) {
   const def = getNode(type ?? "");
   const updateNodeData = useEditorStore((s) => s.updateNodeData);
@@ -224,6 +246,9 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
     (s) => s.nodes.find((n) => n.id === id)?.data,
   );
   const data = (liveData ?? propData) as Record<string, unknown>;
+  const canvasStatus = useHistoryStore((s) => selectLiveNodeStatus(s, id));
+  const liveOutput = useHistoryStore((s) => selectLiveNodeOutput(s, id));
+  const statusChrome = canvasNodeStatusChrome(canvasStatus);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const label = data?.label ?? def?.label ?? type;
@@ -261,6 +286,9 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
   const outputs = def.ui.handles.outputs;
   const credits = creditLabel(def.type, inputs);
   const outputLabel = outputs[0]?.label ?? "Output";
+  const assetUrls =
+    liveOutput !== undefined ? extractAssetUrls(liveOutput) : [];
+  const previewImage = assetUrls.find(isLikelyImageUrl);
 
   const onChange = (key: string, value: unknown) => {
     updateNodeData(id, key, value);
@@ -371,12 +399,35 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
           />
         ))}
         <p className="text-xs font-medium text-[var(--text)]">{outputLabel}</p>
-        <p
-          data-testid={`flow-node-no-output-${id}`}
-          className="mt-1 text-xs text-[var(--text-muted)]"
-        >
-          No output yet
-        </p>
+        {liveOutput !== undefined ? (
+          <div
+            data-testid={`flow-node-output-${id}`}
+            className="mt-1 space-y-1"
+          >
+            {previewImage ? (
+              <img
+                src={previewImage}
+                alt="Node output"
+                data-testid={`flow-node-output-preview-${id}`}
+                className="max-h-24 w-full rounded object-cover"
+              />
+            ) : null}
+            <pre className="max-h-14 overflow-auto rounded bg-[var(--bg)] px-1.5 py-1 font-mono text-[10px] leading-snug text-[var(--text)]">
+              {formatNodeOutputSummary(liveOutput)}
+            </pre>
+            <AssetLinks
+              urls={assetUrls}
+              testIdPrefix={`flow-node-output-${id}`}
+            />
+          </div>
+        ) : (
+          <p
+            data-testid={`flow-node-no-output-${id}`}
+            className="mt-1 text-xs text-[var(--text-muted)]"
+          >
+            No output yet
+          </p>
+        )}
         {credits ? (
           <p
             data-testid={`flow-node-credits-${id}`}
@@ -392,13 +443,25 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
   return (
     <div
       data-testid={`flow-node-${id}`}
-      className="rounded-[var(--node-radius)] border border-[var(--border)] bg-[var(--panel)] shadow-sm"
+      data-status={statusChrome.dataStatus}
+      className={`rounded-[var(--node-radius)] border bg-[var(--panel)] shadow-sm ${statusChrome.rootClassName}`}
       style={{ width: "var(--node-width)" }}
     >
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2">
+      <div
+        className={`flex items-center gap-2 border-b px-3 py-2 ${statusChrome.headerClassName}`}
+      >
         <span className="flex-1 truncate text-sm font-semibold text-[var(--text)]">
           {label as string}
         </span>
+        {statusChrome.showBadge ? (
+          <span
+            data-testid={`flow-node-status-badge-${id}`}
+            data-status={statusChrome.dataStatus}
+            className={statusChrome.badgeClassName}
+          >
+            {statusChrome.dataStatus}
+          </span>
+        ) : null}
         <button
           type="button"
           data-testid={`flow-node-run-${id}`}

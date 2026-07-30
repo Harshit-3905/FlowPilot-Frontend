@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
 import { FlowNode } from "./flow-node";
 import { useEditorStore } from "@/store/editor-store";
+import { useHistoryStore } from "@/store/history-store";
 import type { NodeProps } from "@xyflow/react";
 
 vi.mock("@xyflow/react", () => ({
@@ -14,6 +15,7 @@ vi.mock("@xyflow/react", () => ({
 
 beforeEach(() => {
   useEditorStore.setState({ nodes: [], edges: [] });
+  useHistoryStore.getState().reset();
 });
 
 afterEach(() => {
@@ -92,5 +94,120 @@ describe("FlowNode on-node settings", () => {
     expect(getByTestId(`flow-node-credits-${node.id}`)).toHaveTextContent(
       "~0.21M",
     );
+  });
+});
+
+describe("FlowNode canvas live status", () => {
+  it("defaults to data-status=idle without a live run", () => {
+    const { node, getByTestId, queryByTestId } = renderFlowNode();
+    expect(getByTestId(`flow-node-${node.id}`)).toHaveAttribute(
+      "data-status",
+      "idle",
+    );
+    expect(
+      queryByTestId(`flow-node-status-badge-${node.id}`),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reflects liveNodeStatuses on data-status and badge", () => {
+    const { node, getByTestId, rerender } = renderFlowNode();
+    useHistoryStore.setState({
+      liveRunId: "run_1",
+      liveNodeStatuses: { [node.id]: "running" },
+    });
+    const props = {
+      id: node.id,
+      type: node.type,
+      data: node.data,
+      selected: false,
+      dragging: false,
+      zIndex: 0,
+      selectable: true,
+      deletable: true,
+      draggable: true,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+    } as NodeProps;
+    rerender(<FlowNode {...props} />);
+    expect(getByTestId(`flow-node-${node.id}`)).toHaveAttribute(
+      "data-status",
+      "running",
+    );
+    expect(getByTestId(`flow-node-${node.id}`).className).toContain(
+      "flow-node--status-running",
+    );
+    expect(getByTestId(`flow-node-status-badge-${node.id}`)).toHaveAttribute(
+      "data-status",
+      "running",
+    );
+  });
+
+  it("shows output preview and download href from liveNodeOutputs", () => {
+    const { node, getByTestId, queryByTestId, rerender } = renderFlowNode();
+    const url = "https://cdn.example/done.png";
+    useHistoryStore.setState({
+      liveRunId: "run_1",
+      liveNodeStatuses: { [node.id]: "completed" },
+      liveNodeOutputs: { [node.id]: { result: [url] } },
+    });
+    const props = {
+      id: node.id,
+      type: node.type,
+      data: node.data,
+      selected: false,
+      dragging: false,
+      zIndex: 0,
+      selectable: true,
+      deletable: true,
+      draggable: true,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+    } as NodeProps;
+    rerender(<FlowNode {...props} />);
+
+    expect(queryByTestId(`flow-node-no-output-${node.id}`)).toBeNull();
+    expect(getByTestId(`flow-node-output-${node.id}`)).toHaveTextContent(
+      "done.png",
+    );
+    const download = getByTestId(`flow-node-output-${node.id}-download-0`);
+    expect(download).toHaveAttribute("href", url);
+    expect(download).toHaveAttribute("download");
+    expect(
+      getByTestId(`flow-node-output-${node.id}-view-0`),
+    ).toHaveAttribute("href", url);
+  });
+
+  it("keeps completed output visible after sibling node fails", () => {
+    const { node, getByTestId, rerender } = renderFlowNode();
+    const url = "https://cdn.example/ok.png";
+    useHistoryStore.setState({
+      liveRunId: "run_fail",
+      liveNodeStatuses: {
+        [node.id]: "completed",
+        node_bad: "failed",
+      },
+      liveNodeOutputs: { [node.id]: { url } },
+    });
+    const props = {
+      id: node.id,
+      type: node.type,
+      data: node.data,
+      selected: false,
+      dragging: false,
+      zIndex: 0,
+      selectable: true,
+      deletable: true,
+      draggable: true,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+    } as NodeProps;
+    rerender(<FlowNode {...props} />);
+
+    expect(
+      getByTestId(`flow-node-output-${node.id}-download-0`),
+    ).toHaveAttribute("href", url);
   });
 });

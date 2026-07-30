@@ -7,12 +7,15 @@ import { apiFetch } from "@/lib/api-client";
 import { WorkflowDetailResponseSchema } from "@/contracts";
 import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { NodePalette } from "@/components/node-palette";
+import { HistorySidebar } from "@/components/history-sidebar";
+import { CreditsChrome } from "@/components/credits-chrome";
 import {
   WorkflowRunProvider,
   useWorkflowRun,
 } from "@/components/workflow-run-context";
 import { useEditorStore, type WorkflowGraphDTO } from "@/store/editor-store";
 import { useAutoSave, type SaveStatus } from "@/hooks/use-auto-save";
+import { useWorkflowCredits } from "@/hooks/use-workflow-credits";
 import { z } from "zod";
 
 const PatchResponseSchema = z.object({ id: z.string() }).passthrough();
@@ -31,11 +34,19 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const { getToken } = useAuth();
   const loadGraph = useEditorStore((s) => s.loadGraph);
   const runCtx = useWorkflowRun();
+  const credits = useWorkflowCredits(workflowId);
+  const { refresh: refreshCredits } = credits;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [workflowName, setWorkflowName] = useState("Untitled Workflow");
   const [tab, setTab] = useState<EditorTab>("workflow");
   const saveStatus = useAutoSave(workflowId, getToken);
+
+  const handlePlay = useCallback(async () => {
+    // Refresh Est/Bal immediately before run (Slice 4); BE block is Slice 5.
+    await refreshCredits();
+    await runCtx?.runWorkflow();
+  }, [refreshCredits, runCtx]);
 
   const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRename = useCallback(
@@ -111,12 +122,18 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             className="min-w-0 flex-1 bg-transparent text-base font-semibold text-[var(--text)] outline-none"
           />
           <SaveIndicator status={saveStatus} />
+          <CreditsChrome
+            estimateM={credits.estimateM}
+            balanceM={credits.balanceM}
+            insufficient={credits.insufficient}
+            loading={credits.loading}
+          />
           {tab === "workflow" ? (
             <button
               type="button"
               data-testid="workflow-play"
               disabled={runCtx?.isBusy}
-              onClick={() => void runCtx?.runWorkflow()}
+              onClick={() => void handlePlay()}
               className="ml-2 shrink-0 rounded-md bg-[var(--accent-play)] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               Play
@@ -160,6 +177,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
           <div className="flex-1">
             <WorkflowCanvas />
           </div>
+          <HistorySidebar workflowId={workflowId} />
         </div>
       ) : null}
 
