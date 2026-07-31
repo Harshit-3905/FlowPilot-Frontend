@@ -39,7 +39,7 @@ export function estimateRequestCredits(_input?: unknown): number {
 
 export const requestDefinition = {
   type: "request",
-  label: "Request Inputs",
+  label: "Request-Inputs",
   category: "io",
   input: RequestInputSchema,
   output: RequestOutputSchema,

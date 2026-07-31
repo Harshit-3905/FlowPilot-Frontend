@@ -15,3 +15,10 @@ export function toDisplayM(
 export function formatDisplayM(m: number): string {
   return m.toFixed(2);
 }
+
+/**
+ * Execution History list format: Magica `Credits: 0.0001M` (four decimals).
+ */
+export function formatHistoryCreditsM(m: number): string {
+  return m.toFixed(4);
+}

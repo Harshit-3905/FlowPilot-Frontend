@@ -95,6 +95,102 @@ describe("FlowNode on-node settings", () => {
       "~0.21M",
     );
   });
+
+  it("header has info, reset, Run, and overflow menu", () => {
+    const { node, getByTestId } = renderFlowNode();
+    expect(getByTestId(`flow-node-info-${node.id}`)).toBeInTheDocument();
+    expect(getByTestId(`flow-node-reset-${node.id}`)).toBeInTheDocument();
+    expect(getByTestId(`flow-node-run-${node.id}`)).toHaveTextContent("Run");
+    expect(getByTestId(`flow-node-menu-${node.id}`)).toBeInTheDocument();
+  });
+
+  it("overflow menu lists Duplicate, Duplicate with Edges, Lock, Delete", () => {
+    const { node, getByTestId } = renderFlowNode();
+    fireEvent.click(getByTestId(`flow-node-menu-${node.id}`));
+    expect(getByTestId(`flow-node-menu-panel-${node.id}`)).toBeInTheDocument();
+    expect(
+      getByTestId(`flow-node-menu-duplicate-${node.id}`),
+    ).toHaveTextContent("Duplicate");
+    expect(
+      getByTestId(`flow-node-menu-duplicate-edges-${node.id}`),
+    ).toHaveTextContent("Duplicate with Edges");
+    expect(getByTestId(`flow-node-menu-lock-${node.id}`)).toHaveTextContent(
+      "Lock",
+    );
+    expect(getByTestId(`flow-node-menu-delete-${node.id}`)).toHaveTextContent(
+      "Delete",
+    );
+  });
+
+  it("menu Duplicate clones the node without edges", () => {
+    const a = useEditorStore.getState().addNode("gpt_image_2", { x: 0, y: 0 })!;
+    const b = useEditorStore.getState().addNode("gpt_image_2", { x: 400, y: 0 })!;
+    useEditorStore.getState().onConnect({
+      source: a.id,
+      target: b.id,
+      sourceHandle: "out:result",
+      targetHandle: "in:prompt",
+    });
+    const props = {
+      id: a.id,
+      type: a.type,
+      data: a.data,
+      selected: false,
+      dragging: false,
+      zIndex: 0,
+      selectable: true,
+      deletable: true,
+      draggable: true,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+    } as NodeProps;
+    const { getByTestId } = render(<FlowNode {...props} />);
+    fireEvent.click(getByTestId(`flow-node-menu-${a.id}`));
+    fireEvent.click(getByTestId(`flow-node-menu-duplicate-${a.id}`));
+    expect(useEditorStore.getState().nodes).toHaveLength(3);
+    expect(useEditorStore.getState().edges).toHaveLength(1);
+  });
+
+  it("menu Delete removes the node", () => {
+    const { node, getByTestId } = renderFlowNode();
+    fireEvent.click(getByTestId(`flow-node-menu-${node.id}`));
+    fireEvent.click(getByTestId(`flow-node-menu-delete-${node.id}`));
+    expect(useEditorStore.getState().nodes).toHaveLength(0);
+  });
+
+  it("reset restores field defaults", () => {
+    const { node, getByTestId } = renderFlowNode();
+    fireEvent.change(getByTestId(`node-${node.id}-field-prompt`), {
+      target: { value: "changed" },
+    });
+    expect(
+      (useEditorStore.getState().nodes[0].data.inputs as Record<string, unknown>)
+        .prompt,
+    ).toBe("changed");
+    fireEvent.click(getByTestId(`flow-node-reset-${node.id}`));
+    expect(
+      (useEditorStore.getState().nodes[0].data.inputs as Record<string, unknown>)
+        .prompt,
+    ).toBe("");
+  });
+
+  it("active sub-model pill uses mode-active token class", () => {
+    const { getByTestId } = renderFlowNode();
+    expect(getByTestId("submodel-gpt-image-2-text").className).toContain(
+      "--mode-active",
+    );
+  });
+
+  it("renders dashed upload zone for Image to Image", () => {
+    const { getByTestId, getByText } = renderFlowNode();
+    fireEvent.click(getByTestId("submodel-gpt-image-2-edit"));
+    expect(getByText("Upload Image")).toBeInTheDocument();
+    const zone = getByTestId(
+      `node-${useEditorStore.getState().nodes[0].id}-field-image_urls`,
+    ).closest("label");
+    expect(zone?.className).toContain("--upload-dash");
+  });
 });
 
 describe("FlowNode canvas live status", () => {
@@ -278,5 +374,75 @@ describe("FlowNode canvas live status", () => {
     expect(getByTestId(`flow-node-${bad.id}`).className).toContain(
       "border-[var(--danger)]",
     );
+  });
+});
+
+describe("FlowNode request / response Magica chrome", () => {
+  function propsFor(node: { id: string; type?: string; data: unknown }) {
+    return {
+      id: node.id,
+      type: node.type,
+      data: node.data,
+      selected: false,
+      dragging: false,
+      zIndex: 0,
+      selectable: true,
+      deletable: true,
+      draggable: true,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+    } as NodeProps;
+  }
+
+  it("Request-Inputs empty state + type menu adds text_field", () => {
+    const node = useEditorStore.getState().addNode("request", { x: 0, y: 0 })!;
+    const { getByTestId, getByText, queryByTestId } = render(
+      <FlowNode {...propsFor(node)} />,
+    );
+
+    expect(getByText("Request-Inputs")).toBeInTheDocument();
+    expect(getByTestId(`request-empty-${node.id}`)).toHaveTextContent(
+      /No fields added yet/,
+    );
+    expect(queryByTestId(`flow-node-run-${node.id}`)).not.toBeInTheDocument();
+
+    fireEvent.click(getByTestId(`request-add-field-${node.id}`));
+    expect(getByTestId(`request-field-type-menu-${node.id}`)).toBeInTheDocument();
+    for (const t of [
+      "text",
+      "number",
+      "boolean",
+      "image",
+      "audio",
+      "video",
+      "media",
+      "file",
+    ]) {
+      expect(getByTestId(`request-field-type-${t}`)).toBeInTheDocument();
+    }
+
+    fireEvent.click(getByTestId("request-field-type-text"));
+    const stored = useEditorStore.getState().nodes[0]!.data as {
+      dynamicFields: Array<{ name: string; type: string }>;
+      inputs: { dynamicFields: unknown[] };
+    };
+    expect(stored.dynamicFields).toHaveLength(1);
+    expect(stored.dynamicFields[0]!.name).toBe("text_field");
+    expect(stored.dynamicFields[0]!.type).toBe("text");
+    expect(stored.inputs.dynamicFields).toHaveLength(1);
+  });
+
+  it("Response empty copy is No output added yet", () => {
+    const node = useEditorStore.getState().addNode("response", { x: 0, y: 0 })!;
+    const { getByTestId, getByText, queryByTestId } = render(
+      <FlowNode {...propsFor(node)} />,
+    );
+    expect(getByText("Response")).toBeInTheDocument();
+    expect(getByTestId(`response-empty-${node.id}`)).toHaveTextContent(
+      "No output added yet",
+    );
+    expect(getByTestId("handle-result")).toBeInTheDocument();
+    expect(queryByTestId(`flow-node-run-${node.id}`)).not.toBeInTheDocument();
   });
 });

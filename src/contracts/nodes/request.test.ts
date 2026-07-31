@@ -16,7 +16,7 @@ describe("request definition", () => {
   it("parses as a NodeDefinition", () => {
     const parsed = NodeDefinitionSchema.parse(requestDefinition);
     expect(parsed.type).toBe("request");
-    expect(parsed.label).toBe("Request Inputs");
+    expect(parsed.label).toBe("Request-Inputs");
     expect(parsed.category).toBe("io");
     expect(parsed.ui.fields).toEqual([]);
     expect(parsed.ui.handles.inputs).toEqual([]);

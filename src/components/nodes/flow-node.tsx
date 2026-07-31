@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   estimateCredits,
@@ -11,6 +17,12 @@ import {
 } from "@/contracts";
 import { useWorkflowRun } from "@/components/workflow-run-context";
 import { AssetLinks } from "@/components/asset-links";
+import {
+  RequestAddFieldButton,
+  RequestNodeBody,
+  readDynamicFields,
+} from "@/components/nodes/request-node-body";
+import { ResponseNodeBody } from "@/components/nodes/response-node-body";
 import { canvasNodeStatusChrome } from "@/lib/canvas-node-status";
 import {
   extractAssetUrls,
@@ -25,6 +37,7 @@ import {
 } from "@/store/history-store";
 
 const HANDLE_SIZE = 10;
+const REQUIRED_FIELD_KEYS = new Set(["prompt", "videos", "image_url"]);
 
 function handleStyle(dataType: string, side: "left" | "right"): CSSProperties {
   return {
@@ -45,16 +58,136 @@ function fieldDefaultValue(field: UiField): string | number {
   return "";
 }
 
+function fieldLabelText(field: UiField): string {
+  const star = REQUIRED_FIELD_KEYS.has(field.key) ? "*" : "";
+  return `${field.label}${star}`;
+}
+
+function uploadZoneCopy(field: UiField, dataType?: string): string {
+  const hay = `${field.label} ${dataType ?? ""}`.toLowerCase();
+  if (hay.includes("video")) return "Upload Video";
+  return "Upload Image";
+}
+
+function IconInfo({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6M12 7h.01" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconReset({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <path
+        d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconPlay({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="10"
+      height="10"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function IconCredits({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v8M9.5 10.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5M9.5 13.5c.5 1 1.5 1.5 2.5 1.5s2-.5 2.5-1.5" />
+    </svg>
+  );
+}
+
+function IconUpload({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <path
+        d="M12 16V7M8 10l4-4 4 4M5 19h14"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ResponseIcon() {
+  return (
+    <span
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--accent-play)] text-white"
+      aria-hidden
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <path d="M9 5H5v14h14v-4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M15 3h6v6M21 3l-9 9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
 function FieldControl({
   field,
   value,
   onChange,
   nodeId,
+  dataType,
 }: {
   field: UiField;
   value: unknown;
   onChange: (key: string, val: unknown) => void;
   nodeId: string;
+  dataType?: string;
 }) {
   const id = `node-${nodeId}-field-${field.key}`;
   const strVal =
@@ -72,6 +205,13 @@ function FieldControl({
           data-testid={id}
           rows={3}
           value={strVal}
+          placeholder={
+            field.key === "prompt"
+              ? "Describe…"
+              : field.key === "system_prompt"
+                ? "You are a helpful assistant…"
+                : undefined
+          }
           onChange={(e) => onChange(field.key, e.target.value)}
           className={`${inputClass} min-h-[72px] resize-y`}
         />
@@ -103,17 +243,40 @@ function FieldControl({
           <span className="text-xs text-[var(--text-muted)]">{strVal}</span>
         </div>
       );
-    case "switch":
+    case "switch": {
+      const on = Boolean(value ?? field.default);
       return (
-        <input
-          id={id}
+        <div
+          role="switch"
+          aria-checked={on}
           data-testid={id}
-          type="checkbox"
-          checked={Boolean(value ?? field.default)}
-          onChange={(e) => onChange(field.key, e.target.checked)}
-          className="nodrag nopan h-4 w-4 accent-[var(--toggle-on)]"
-        />
+          className="nodrag nopan inline-flex overflow-hidden rounded-md border border-[var(--border)] text-[11px] font-medium"
+        >
+          <button
+            type="button"
+            className={
+              !on
+                ? "bg-[var(--bg)] px-2.5 py-1 text-[var(--text)]"
+                : "bg-[var(--panel)] px-2.5 py-1 text-[var(--text-muted)]"
+            }
+            onClick={() => onChange(field.key, false)}
+          >
+            False
+          </button>
+          <button
+            type="button"
+            className={
+              on
+                ? "bg-[var(--toggle-on)] px-2.5 py-1 text-white"
+                : "bg-[var(--panel)] px-2.5 py-1 text-[var(--text-muted)]"
+            }
+            onClick={() => onChange(field.key, true)}
+          >
+            True
+          </button>
+        </div>
       );
+    }
     case "select": {
       const opts = field.options ?? [
         {
@@ -141,9 +304,10 @@ function FieldControl({
       return (
         <label
           htmlFor={id}
-          className="nodrag nopan flex cursor-pointer flex-col items-center justify-center rounded-[var(--field-radius)] border border-dashed border-[var(--upload-dash)] bg-[var(--bg)] px-3 py-4 text-xs text-[var(--text-muted)]"
+          className="nodrag nopan flex cursor-pointer flex-col items-center justify-center gap-1 rounded-[var(--field-radius)] border border-dashed border-[var(--upload-dash)] bg-[var(--bg)] px-3 py-5 text-xs text-[var(--text-muted)]"
         >
-          <span>Upload {field.label}</span>
+          <IconUpload className="text-[var(--text-muted)]" />
+          <span>{uploadZoneCopy(field, dataType)}</span>
           <input id={id} data-testid={id} type="file" className="sr-only" />
         </label>
       );
@@ -175,6 +339,7 @@ function FieldRow({
   inputHandle?: HandleDescriptor;
 }) {
   const labelId = `node-${nodeId}-field-${field.key}`;
+  const showPlus = field.control !== "switch";
   return (
     <div className="relative px-3 py-2" data-testid={`field-row-${field.key}`}>
       {inputHandle ? (
@@ -190,10 +355,9 @@ function FieldRow({
         <div className="flex items-center justify-between gap-2">
           <label
             htmlFor={labelId}
-            className="text-xs font-medium text-[var(--text)]"
+            className="text-xs font-medium text-[var(--text-muted)]"
           >
-            {field.label}
-            {field.key === "prompt" ? "*" : ""}
+            {fieldLabelText(field)}
           </label>
           {field.control === "switch" ? (
             <FieldControl
@@ -201,16 +365,31 @@ function FieldRow({
               value={value}
               onChange={onChange}
               nodeId={nodeId}
+              dataType={inputHandle?.dataType}
             />
+          ) : showPlus ? (
+            <button
+              type="button"
+              data-testid={`field-add-${field.key}`}
+              className="nodrag nopan flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-xs text-[var(--text-muted)]"
+              aria-label={`Add ${field.label}`}
+            >
+              +
+            </button>
           ) : null}
         </div>
         {field.control !== "switch" ? (
-          <FieldControl
-            field={field}
-            value={value}
-            onChange={onChange}
-            nodeId={nodeId}
-          />
+          <div className="flex items-start gap-1.5">
+            <div className="min-w-0 flex-1">
+              <FieldControl
+                field={field}
+                value={value}
+                onChange={onChange}
+                nodeId={nodeId}
+                dataType={inputHandle?.dataType}
+              />
+            </div>
+          </div>
         ) : null}
       </div>
     </div>
@@ -237,10 +416,103 @@ function formatNodeOutputSummary(value: unknown): string {
   }
 }
 
+function NodeOverflowMenu({
+  nodeId,
+  locked,
+  onClose,
+}: {
+  nodeId: string;
+  locked: boolean;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const duplicateNode = useEditorStore((s) => s.duplicateNode);
+  const deleteNode = useEditorStore((s) => s.deleteNode);
+  const toggleNodeLock = useEditorStore((s) => s.toggleNodeLock);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    const onPointer = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [onClose]);
+
+  const itemClass =
+    "nodrag nopan flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--text)] hover:bg-[var(--bg)]";
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      data-testid={`flow-node-menu-panel-${nodeId}`}
+      className="absolute right-0 top-full z-20 mt-1 min-w-[200px] overflow-hidden rounded-[var(--field-radius)] border border-[var(--border)] bg-[var(--panel)] py-1 shadow-[var(--shadow-soft)]"
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-testid={`flow-node-menu-duplicate-${nodeId}`}
+        className={itemClass}
+        onClick={() => {
+          duplicateNode(nodeId, false);
+          onClose();
+        }}
+      >
+        Duplicate
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid={`flow-node-menu-duplicate-edges-${nodeId}`}
+        className={itemClass}
+        onClick={() => {
+          duplicateNode(nodeId, true);
+          onClose();
+        }}
+      >
+        Duplicate with Edges
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid={`flow-node-menu-lock-${nodeId}`}
+        className={itemClass}
+        onClick={() => {
+          toggleNodeLock(nodeId);
+          onClose();
+        }}
+      >
+        {locked ? "Unlock" : "Lock"}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid={`flow-node-menu-delete-${nodeId}`}
+        className={`${itemClass} text-[var(--danger)]`}
+        disabled={locked}
+        onClick={() => {
+          deleteNode(nodeId);
+          onClose();
+        }}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
 export function FlowNode({ id, type, data: propData }: NodeProps) {
   const def = getNode(type ?? "");
   const updateNodeData = useEditorStore((s) => s.updateNodeData);
   const setActiveSubModel = useEditorStore((s) => s.setActiveSubModel);
+  const resetNodeInputs = useEditorStore((s) => s.resetNodeInputs);
   const runCtx = useWorkflowRun();
   const liveData = useEditorStore(
     (s) => s.nodes.find((n) => n.id === id)?.data,
@@ -250,10 +522,12 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
   const liveOutput = useHistoryStore((s) => selectLiveNodeOutput(s, id));
   const statusChrome = canvasNodeStatusChrome(canvasStatus);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const label = data?.label ?? def?.label ?? type;
   const inputs = (data?.inputs ?? {}) as Record<string, unknown>;
   const config = (data?.config ?? {}) as Record<string, unknown>;
+  const locked = Boolean(config.locked);
   const activeSubModelId =
     (config.activeSubModelId as string | null | undefined) ??
     def?.subModels?.[0]?.id ??
@@ -264,9 +538,70 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
       <div
         data-testid={`flow-node-${id}`}
         className="flow-node-card rounded-[var(--node-radius)] border border-[var(--border)] bg-[var(--panel)] p-3"
-        style={{ width: 380 }}
+        style={{ width: "var(--node-width)" }}
       >
         <span className="text-xs text-[var(--danger)]">Unknown: {type}</span>
+      </div>
+    );
+  }
+
+  if (type === "request") {
+    const fields = readDynamicFields(data);
+    return (
+      <div
+        data-testid={`flow-node-${id}`}
+        data-status={statusChrome.dataStatus}
+        className={`flow-node-card rounded-[var(--node-radius)] border bg-[var(--panel)] ${statusChrome.rootClassName}`}
+        style={{ width: "var(--node-width)" }}
+      >
+        <div
+          className={`relative flex items-center gap-1 border-b px-3 py-2 ${statusChrome.headerClassName}`}
+        >
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text)]">
+            {label as string}
+          </span>
+          <button
+            type="button"
+            data-testid={`flow-node-info-${id}`}
+            className="nodrag nopan rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg)]"
+            aria-label="Node info"
+            title={def.label}
+          >
+            <IconInfo />
+          </button>
+          <RequestAddFieldButton nodeId={id} fields={fields} />
+        </div>
+        <RequestNodeBody nodeId={id} data={data} />
+      </div>
+    );
+  }
+
+  if (type === "response") {
+    return (
+      <div
+        data-testid={`flow-node-${id}`}
+        data-status={statusChrome.dataStatus}
+        className={`flow-node-card rounded-[var(--node-radius)] border bg-[var(--panel)] ${statusChrome.rootClassName}`}
+        style={{ width: "var(--node-width)" }}
+      >
+        <div
+          className={`relative flex items-center gap-1 border-b px-3 py-2 ${statusChrome.headerClassName}`}
+        >
+          <ResponseIcon />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text)]">
+            {label as string}
+          </span>
+          <button
+            type="button"
+            data-testid={`flow-node-info-${id}`}
+            className="nodrag nopan rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg)]"
+            aria-label="Node info"
+            title={def.label}
+          >
+            <IconInfo />
+          </button>
+        </div>
+        <ResponseNodeBody nodeId={id} />
       </div>
     );
   }
@@ -299,7 +634,7 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
       {def.subModels && def.subModels.length > 0 ? (
         <div
           data-testid={`flow-node-submodels-${id}`}
-          className="nodrag nopan flex gap-1 px-3 py-2"
+          className="nodrag nopan mx-3 my-2 flex gap-0.5 rounded-lg bg-[var(--bg)] p-0.5"
         >
           {def.subModels.map((sm) => {
             const active = sm.id === activeSubModelId;
@@ -311,8 +646,8 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
                 onClick={() => setActiveSubModel(id, sm.id)}
                 className={
                   active
-                    ? "rounded-md bg-[var(--mode-active)] px-2.5 py-1 text-xs font-medium text-white"
-                    : "rounded-md bg-[var(--bg)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]"
+                    ? "flex-1 rounded-md bg-[var(--mode-active)] px-2.5 py-1.5 text-xs font-medium text-white"
+                    : "flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--text-muted)]"
                 }
               >
                 {sm.label}
@@ -361,13 +696,13 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
             <button
               type="button"
               data-testid={`flow-node-settings-toggle-${id}`}
-              className="nodrag nopan flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-[var(--text)]"
+              className="nodrag nopan flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--text)]"
               onClick={() => setSettingsOpen((o) => !o)}
             >
-              <span>Settings</span>
-              <span className="text-[var(--text-muted)]">
-                {settingsOpen ? "▾" : "▸"}
+              <span className="text-[var(--text-muted)]" aria-hidden>
+                {settingsOpen ? "▾" : "›"}
               </span>
+              <span>Settings</span>
             </button>
           </div>
           {settingsOpen ? (
@@ -398,11 +733,13 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
             data-testid={`handle-${h.id}`}
           />
         ))}
-        <p className="text-xs font-medium text-[var(--text)]">{outputLabel}</p>
+        <p className="text-xs font-medium text-[var(--text-muted)]">
+          {outputLabel}
+        </p>
         {liveOutput !== undefined ? (
           <div
             data-testid={`flow-node-output-${id}`}
-            className="mt-1 space-y-1"
+            className="mt-1 space-y-1 rounded-[var(--field-radius)] border border-[var(--border)] p-2"
           >
             {previewImage ? (
               <img
@@ -421,20 +758,22 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
             />
           </div>
         ) : (
-          <p
+          <div
             data-testid={`flow-node-no-output-${id}`}
-            className="mt-1 text-xs text-[var(--text-muted)]"
+            className="mt-1 flex min-h-[80px] items-center justify-center rounded-[var(--field-radius)] border border-[var(--border)] px-2 py-4"
           >
-            No output yet
-          </p>
+            <p className="text-xs text-[var(--text-muted)]">No output yet</p>
+          </div>
         )}
         {credits ? (
-          <p
+          <div
             data-testid={`flow-node-credits-${id}`}
-            className="mt-2 text-right text-[10px] text-[var(--text-muted)]"
+            className="mt-2 flex items-center justify-end gap-1 text-[10px] text-[var(--text-muted)]"
           >
-            {credits}
-          </p>
+            <IconCredits />
+            <span>{credits}</span>
+            <IconInfo className="opacity-70" />
+          </div>
         ) : null}
       </div>
     </>
@@ -448,9 +787,9 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
       style={{ width: "var(--node-width)" }}
     >
       <div
-        className={`flex items-center gap-2 border-b px-3 py-2 ${statusChrome.headerClassName}`}
+        className={`relative flex items-center gap-1 border-b px-3 py-2 ${statusChrome.headerClassName}`}
       >
-        <span className="flex-1 truncate text-sm font-semibold text-[var(--text)]">
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text)]">
           {label as string}
         </span>
         {statusChrome.showBadge ? (
@@ -464,21 +803,51 @@ export function FlowNode({ id, type, data: propData }: NodeProps) {
         ) : null}
         <button
           type="button"
-          data-testid={`flow-node-run-${id}`}
-          disabled={!runCtx || runCtx.isBusy}
-          onClick={() => void runCtx?.runNode(id)}
-          className="nodrag nopan rounded-md bg-[var(--accent-run-node)] px-2.5 py-1 text-xs font-semibold text-[var(--text)] opacity-90 disabled:cursor-not-allowed"
+          data-testid={`flow-node-info-${id}`}
+          className="nodrag nopan rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg)]"
+          aria-label="Node info"
+          title={def.label}
         >
-          Run
+          <IconInfo />
         </button>
         <button
           type="button"
-          data-testid={`flow-node-menu-${id}`}
-          className="nodrag nopan px-1 text-sm text-[var(--text-muted)]"
-          aria-label="Node menu"
+          data-testid={`flow-node-reset-${id}`}
+          className="nodrag nopan rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg)]"
+          aria-label="Reset inputs"
+          onClick={() => resetNodeInputs(id)}
         >
-          ⋮
+          <IconReset />
         </button>
+        <button
+          type="button"
+          data-testid={`flow-node-run-${id}`}
+          disabled={!runCtx || runCtx.isBusy}
+          onClick={() => void runCtx?.runNode(id)}
+          className="nodrag nopan inline-flex items-center gap-1 rounded-md bg-[var(--accent-run-node)] px-2.5 py-1 text-xs font-semibold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <IconPlay />
+          Run
+        </button>
+        <div className="relative">
+          <button
+            type="button"
+            data-testid={`flow-node-menu-${id}`}
+            className="nodrag nopan flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border)] text-sm text-[var(--text-muted)] hover:bg-[var(--bg)]"
+            aria-label="Node menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            ⋯
+          </button>
+          {menuOpen ? (
+            <NodeOverflowMenu
+              nodeId={id}
+              locked={locked}
+              onClose={() => setMenuOpen(false)}
+            />
+          ) : null}
+        </div>
       </div>
       {body}
     </div>

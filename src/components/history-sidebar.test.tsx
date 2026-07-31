@@ -18,6 +18,7 @@ import {
   hasLogEntries,
   nodeErrorMessage,
   normalizeLogEntries,
+  statusBadgeClass,
 } from "./history-sidebar";
 import {
   historyFixtures,
@@ -95,6 +96,16 @@ describe("formatDuration", () => {
   });
 });
 
+describe("statusBadgeClass", () => {
+  it("maps completed/failed/running to success/danger/accent-play tokens", () => {
+    expect(statusBadgeClass("completed")).toMatch(/--success/);
+    expect(statusBadgeClass("failed")).toMatch(/--danger/);
+    expect(statusBadgeClass("running")).toMatch(/--accent-play/);
+    expect(statusBadgeClass("queued")).toMatch(/--text-muted/);
+    expect(statusBadgeClass("cancelled")).toMatch(/--text-muted/);
+  });
+});
+
 describe("formatTimestamp", () => {
   it("returns a locale string for valid ISO", () => {
     const out = formatTimestamp("2026-07-30T10:00:00.000Z");
@@ -104,7 +115,23 @@ describe("formatTimestamp", () => {
 });
 
 describe("HistorySidebar", () => {
-  it("fetches runs for workflowId and renders status, timestamp, duration, scope", async () => {
+  it("renders Magica Execution History chrome: title, Close, UI/API tabs", async () => {
+    const onClose = vi.fn();
+    render(<HistorySidebar workflowId="wf_1" onClose={onClose} />);
+
+    expect(screen.getByText("Execution History")).toBeInTheDocument();
+    expect(screen.getByTestId("history-filter-ui")).toHaveTextContent("UI Runs");
+    expect(screen.getByTestId("history-filter-api")).toHaveTextContent("API Runs");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("history-list")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("history-close"));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("fetches runs for workflowId and renders Completed + Credits + timestamp", async () => {
     render(<HistorySidebar workflowId="wf_1" />);
 
     await waitFor(() =>
@@ -118,7 +145,10 @@ describe("HistorySidebar", () => {
     expect(completed).toHaveAttribute("data-scope", "workflow");
     expect(
       completed.querySelector('[data-testid="history-run-status"]'),
-    ).toHaveTextContent("completed");
+    ).toHaveTextContent("Completed");
+    expect(
+      completed.querySelector('[data-testid="history-run-credits"]'),
+    ).toHaveTextContent("Credits: 0.0001M");
     expect(
       completed.querySelector('[data-testid="history-run-scope"]'),
     ).toHaveTextContent("Workflow");
@@ -135,14 +165,39 @@ describe("HistorySidebar", () => {
     expect(running).toHaveAttribute("data-status", "running");
     expect(running).toHaveAttribute("data-scope", "node");
     expect(
+      running.querySelector('[data-testid="history-run-status"]'),
+    ).toHaveTextContent("Running");
+    expect(
+      running.querySelector('[data-testid="history-run-credits"]'),
+    ).toHaveTextContent("Credits: —");
+    expect(
       running.querySelector('[data-testid="history-run-duration"]'),
     ).toHaveTextContent("—");
     expect(
       running.querySelector('[data-testid="history-run-scope"]'),
     ).toHaveTextContent("Node");
 
-    expect(screen.getByText(/History/)).toBeInTheDocument();
-    expect(screen.getByText("(3)")).toBeInTheDocument();
+    const failed = screen.getByTestId("history-run-run_hist_failed");
+    expect(
+      failed.querySelector('[data-testid="history-run-status"]'),
+    ).toHaveTextContent("Failed");
+    expect(
+      failed.querySelector('[data-testid="history-run-credits"]'),
+    ).toHaveTextContent("Credits: 0.2100M");
+
+    expect(screen.getByText("Execution History")).toBeInTheDocument();
+  });
+
+  it("API Runs tab shows empty state", async () => {
+    render(<HistorySidebar workflowId="wf_1" />);
+    await waitFor(() =>
+      expect(screen.getByTestId("history-list")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId("history-filter-api"));
+    expect(screen.getByTestId("history-empty")).toHaveTextContent(
+      "No API runs yet.",
+    );
+    expect(screen.queryByTestId("history-list")).not.toBeInTheDocument();
   });
 
   it("renders product scope labels for each fixture scope (workflow | node)", async () => {
@@ -324,6 +379,38 @@ describe("HistorySidebar", () => {
     }
   });
 
+  it("empty / loading / error states use muted and danger tokens", async () => {
+    server.use(
+      http.get("http://localhost:3001/api/v1/workflows/:id/runs", () =>
+        HttpResponse.json({ runs: [] }),
+      ),
+    );
+    const { unmount } = render(<HistorySidebar workflowId="wf_empty" />);
+    await waitFor(() =>
+      expect(screen.getByTestId("history-empty")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("history-empty").className).toMatch(
+      /--text-muted/,
+    );
+    unmount();
+    cleanup();
+    useHistoryStore.getState().reset();
+
+    server.use(
+      http.get("http://localhost:3001/api/v1/workflows/:id/runs", () =>
+        HttpResponse.json(
+          { code: "server_error", message: "boom" },
+          { status: 500 },
+        ),
+      ),
+    );
+    render(<HistorySidebar workflowId="wf_err" />);
+    await waitFor(() =>
+      expect(screen.getByTestId("history-error")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("history-error").className).toMatch(/--danger/);
+  });
+
   it("shows empty state when there are no runs", async () => {
     server.use(
       http.get("http://localhost:3001/api/v1/workflows/:id/runs", () =>
@@ -473,7 +560,7 @@ describe("HistorySidebar", () => {
       screen
         .getByTestId("history-run-run_hist_2")
         .querySelector('[data-testid="history-run-status"]'),
-    ).toHaveTextContent("completed");
+    ).toHaveTextContent("Completed");
 
     close();
     expect(source.closed).toBe(true);

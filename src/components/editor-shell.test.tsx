@@ -44,8 +44,12 @@ const server = setupServer(
   ...creditsHandlers,
 );
 
+const { mockGetToken } = vi.hoisted(() => ({
+  mockGetToken: vi.fn(async () => "tok"),
+}));
+
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: async () => "tok" }),
+  useAuth: () => ({ getToken: mockGetToken }),
 }));
 
 vi.mock("next/link", () => ({
@@ -209,6 +213,14 @@ describe("Canvas chrome (13C)", () => {
       ),
     );
     expect(getByTestId("credits-bal")).toHaveTextContent("Bal 0.00 M");
+    expect(getByTestId("credits-bal")).toHaveAttribute(
+      "data-insufficient",
+      "true",
+    );
+    expect(getByTestId("credits-bal").className).toMatch(/--danger/);
+    expect(getByTestId("credits-insufficient-hint").className).toMatch(
+      /--danger/,
+    );
   });
 
   it("refreshes estimate before Play", async () => {
@@ -234,12 +246,63 @@ describe("Canvas chrome (13C)", () => {
     });
   });
 
+  it("refreshes Bal after successful Play (post-reserve)", async () => {
+    let balanceCalls = 0;
+    let phase: "idle" | "reserved" = "idle";
+    server.use(
+      http.get("http://localhost:3001/api/v1/credits", () => {
+        balanceCalls += 1;
+        if (phase === "idle") {
+          return HttpResponse.json(creditsFixtures.balance);
+        }
+        return HttpResponse.json({ balance: 8_280_000, displayM: 8.28 });
+      }),
+      http.post("http://localhost:3001/api/v1/workflows/:id/runs", () => {
+        phase = "reserved";
+        return HttpResponse.json({ runId: "run_wf_1" }, { status: 201 });
+      }),
+    );
+
+    const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
+    await waitFor(() =>
+      expect(getByTestId("credits-bal")).toHaveTextContent("Bal 10.00 M"),
+    );
+    const afterLoad = balanceCalls;
+
+    fireEvent.click(getByTestId("workflow-play"));
+
+    await waitFor(() =>
+      expect(getByTestId("credits-bal")).toHaveTextContent("Bal 8.28 M"),
+    );
+    expect(balanceCalls).toBeGreaterThan(afterLoad);
+  });
+
+  it("opens history from header clock and switches to Workflow tab", async () => {
+    const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
+    await waitFor(() =>
+      expect(getByTestId("workflow-editor")).toBeInTheDocument(),
+    );
+    fireEvent.click(getByTestId("workflow-tab-playground"));
+    expect(getByTestId("workflow-tab-playground")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    fireEvent.click(getByTestId("history-toggle"));
+    expect(getByTestId("workflow-tab-workflow")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    expect(getByTestId("history-sidebar")).toBeInTheDocument();
+  });
+
   it("opens palette from AppShell rail event", async () => {
     const { getByTestId } = render(<WorkflowEditor workflowId="wf_1" />);
     await waitFor(() =>
       expect(getByTestId("workflow-editor")).toBeInTheDocument(),
     );
     window.dispatchEvent(new Event("flowpilot:open-palette"));
-    expect(getByTestId("node-palette")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(getByTestId("node-palette")).toBeInTheDocument(),
+    );
   });
 });

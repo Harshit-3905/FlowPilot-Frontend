@@ -140,7 +140,7 @@ export function WorkflowCanvas({ onOpenPalette }: WorkflowCanvasProps) {
           variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
-          color="#D1D1D6"
+          color="var(--grid-dot)"
           bgColor="var(--bg)"
         />
         {minimapOpen ? (

@@ -7,7 +7,7 @@
   "nodes": [
     {
       "type": "request",
-      "label": "Request Inputs",
+      "label": "Request-Inputs",
       "labelsAlt": ["Request-Inputs"],
       "category": "io",
       "palettePath": ["OTHERS", "Input"],

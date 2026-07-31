@@ -401,11 +401,14 @@ describe("FE run triggers (Slice 8)", () => {
       const banner = getByTestId("run-status");
       expect(banner).toHaveAttribute("data-kind", "error");
       expect(banner).toHaveAttribute("data-code", "insufficient_credits");
+      expect(banner).toHaveAttribute("data-credits-banner", "true");
+      expect(banner.className).toMatch(/--danger/);
       expect(getByTestId("run-status-message")).toHaveTextContent(
         "Insufficient credits",
       );
       expect(getByTestId("run-status-message")).toHaveTextContent("1.72 M");
       expect(getByTestId("run-status-message")).toHaveTextContent("0.00 M");
+      expect(banner.textContent ?? "").not.toMatch(/upgrade|lifetime|pay/i);
     });
 
     fireEvent.click(getByTestId("run-status-dismiss"));

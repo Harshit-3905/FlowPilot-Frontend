@@ -205,3 +205,77 @@ describe("duplicateSelected", () => {
     expect(useEditorStore.getState().nodes).toHaveLength(1);
   });
 });
+
+describe("duplicateNode / deleteNode / lock / reset", () => {
+  it("duplicateNode without edges clones only the node", () => {
+    const a = useEditorStore.getState().addNode("gpt_image_2", { x: 0, y: 0 })!;
+    const b = useEditorStore.getState().addNode("gpt_image_2", { x: 200, y: 0 })!;
+    useEditorStore.getState().onConnect({
+      source: a.id,
+      target: b.id,
+      sourceHandle: "out:result",
+      targetHandle: "in:prompt",
+    });
+    useEditorStore.getState().duplicateNode(a.id, false);
+    expect(useEditorStore.getState().nodes).toHaveLength(3);
+    expect(useEditorStore.getState().edges).toHaveLength(1);
+  });
+
+  it("duplicateNode withEdges remaps incident edges", () => {
+    const a = useEditorStore.getState().addNode("gpt_image_2", { x: 0, y: 0 })!;
+    const b = useEditorStore.getState().addNode("gpt_image_2", { x: 200, y: 0 })!;
+    useEditorStore.getState().onConnect({
+      source: a.id,
+      target: b.id,
+      sourceHandle: "out:result",
+      targetHandle: "in:prompt",
+    });
+    useEditorStore.getState().duplicateNode(a.id, true);
+    const { nodes, edges } = useEditorStore.getState();
+    expect(nodes).toHaveLength(3);
+    expect(edges).toHaveLength(2);
+    const clone = nodes.find((n) => n.id !== a.id && n.id !== b.id)!;
+    expect(edges.some((e) => e.source === clone.id && e.target === b.id)).toBe(
+      true,
+    );
+  });
+
+  it("deleteNode removes node and incident edges", () => {
+    const a = useEditorStore.getState().addNode("gpt_image_2")!;
+    const b = useEditorStore.getState().addNode("gpt_image_2")!;
+    useEditorStore.getState().onConnect({
+      source: a.id,
+      target: b.id,
+      sourceHandle: "out:result",
+      targetHandle: "in:prompt",
+    });
+    useEditorStore.getState().deleteNode(a.id);
+    expect(useEditorStore.getState().nodes).toHaveLength(1);
+    expect(useEditorStore.getState().edges).toHaveLength(0);
+  });
+
+  it("toggleNodeLock blocks deleteNode", () => {
+    const a = useEditorStore.getState().addNode("gpt_image_2")!;
+    useEditorStore.getState().toggleNodeLock(a.id);
+    const locked = useEditorStore.getState().nodes[0];
+    expect(
+      (locked.data.config as Record<string, unknown>).locked,
+    ).toBe(true);
+    expect(locked.draggable).toBe(false);
+    useEditorStore.getState().deleteNode(a.id);
+    expect(useEditorStore.getState().nodes).toHaveLength(1);
+  });
+
+  it("resetNodeInputs restores definition defaults", () => {
+    const a = useEditorStore.getState().addNode("gpt_image_2")!;
+    useEditorStore.getState().updateNodeData(a.id, "prompt", "x");
+    useEditorStore.getState().updateNodeData(a.id, "quality", "Low");
+    useEditorStore.getState().resetNodeInputs(a.id);
+    const inputs = useEditorStore.getState().nodes[0].data.inputs as Record<
+      string,
+      unknown
+    >;
+    expect(inputs.prompt).toBe("");
+    expect(inputs.quality).toBe("High");
+  });
+});

@@ -1,12 +1,11 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   RunDetailResponseSchema,
   RunHistoryListResponseSchema,
   getNode,
-  runScopeLabel,
   type AttemptOutcome,
   type RunHistoryEntry,
   type RunNodeAttempt,
@@ -15,7 +14,11 @@ import {
 } from "@/contracts";
 import { apiFetch } from "@/lib/api-client";
 import { extractAssetUrls } from "@/lib/asset-urls";
-import { formatDisplayM, toDisplayM } from "@/lib/format-credits";
+import {
+  formatDisplayM,
+  formatHistoryCreditsM,
+  toDisplayM,
+} from "@/lib/format-credits";
 import { AssetLinks } from "@/components/asset-links";
 import { useHistoryStore } from "@/store/history-store";
 
@@ -30,10 +33,20 @@ type DetailState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
-export function HistorySidebar({ workflowId }: { workflowId: string }) {
+type HistoryFilter = "ui" | "api";
+
+export function HistorySidebar({
+  workflowId,
+  onClose,
+}: {
+  workflowId: string;
+  onClose?: () => void;
+}) {
   const { getToken } = useAuth();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [detail, setDetail] = useState<DetailState>({ kind: "idle" });
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("ui");
+  const [runFilter, setRunFilter] = useState<"all">("all");
 
   const runs = useHistoryStore((s) => s.runs);
   const selectedRunId = useHistoryStore((s) => s.selectedRunId);
@@ -102,25 +115,81 @@ export function HistorySidebar({ workflowId }: { workflowId: string }) {
     };
   }, [selectedRunId, getToken, setDetailNodes]);
 
+  const visibleRuns = useMemo(() => {
+    if (historyFilter === "api") return [];
+    return runs;
+  }, [historyFilter, runs]);
+
   return (
     <aside
       data-testid="history-sidebar"
-      className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--panel)]"
+      className="flex w-80 shrink-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--panel)] shadow-[var(--shadow-soft)]"
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-2.5">
-        <HistoryClockIcon />
-        <h2 className="text-sm font-semibold text-[var(--text)]">
-          History
-          {state.kind === "ready" ? (
-            <span className="ml-1 font-normal text-[var(--text-muted)]">
-              ({runs.length})
-            </span>
-          ) : null}
+      <header className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
+        <h2 className="text-[15px] font-semibold text-[var(--text)]">
+          Execution History
         </h2>
+        {onClose ? (
+          <button
+            type="button"
+            data-testid="history-close"
+            onClick={onClose}
+            className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            Close
+          </button>
+        ) : null}
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        data-testid="history-filter-tabs"
+        className="mx-4 flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-[12px] font-medium"
+      >
+        <button
+          type="button"
+          data-testid="history-filter-ui"
+          data-active={historyFilter === "ui" ? "true" : "false"}
+          onClick={() => setHistoryFilter("ui")}
+          className={
+            historyFilter === "ui"
+              ? "flex-1 rounded-md bg-[var(--panel)] px-3 py-1.5 text-[var(--text)] shadow-[var(--shadow-soft)]"
+              : "flex-1 rounded-md px-3 py-1.5 text-[var(--text-muted)]"
+          }
+        >
+          UI Runs
+        </button>
+        <button
+          type="button"
+          data-testid="history-filter-api"
+          data-active={historyFilter === "api" ? "true" : "false"}
+          onClick={() => setHistoryFilter("api")}
+          className={
+            historyFilter === "api"
+              ? "flex-1 rounded-md bg-[var(--panel)] px-3 py-1.5 text-[var(--text)] shadow-[var(--shadow-soft)]"
+              : "flex-1 rounded-md px-3 py-1.5 text-[var(--text-muted)]"
+          }
+        >
+          API Runs
+        </button>
+      </div>
+
+      <div className="mx-4 mt-3 flex items-center justify-between gap-2">
+        <span className="text-xs text-[var(--text-muted)]">Run history</span>
+        <label className="relative">
+          <span className="sr-only">Filter runs</span>
+          <select
+            data-testid="history-run-filter"
+            value={runFilter}
+            onChange={() => setRunFilter("all")}
+            className="h-7 appearance-none rounded-md border border-[var(--border)] bg-[var(--panel)] py-0.5 pl-2 pr-6 text-xs text-[var(--text)] outline-none"
+          >
+            <option value="all">All</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {state.kind === "loading" ? (
             <p
               data-testid="history-loading"
@@ -140,18 +209,18 @@ export function HistorySidebar({ workflowId }: { workflowId: string }) {
             </p>
           ) : null}
 
-          {state.kind === "ready" && runs.length === 0 ? (
+          {state.kind === "ready" && visibleRuns.length === 0 ? (
             <p
               data-testid="history-empty"
               className="px-3 py-8 text-center text-sm text-[var(--text-muted)]"
             >
-              No runs yet.
+              {historyFilter === "api" ? "No API runs yet." : "No runs yet."}
             </p>
           ) : null}
 
-          {state.kind === "ready" && runs.length > 0 ? (
-            <ul data-testid="history-list" className="divide-y divide-[var(--border)]">
-              {runs.map((run) => (
+          {state.kind === "ready" && visibleRuns.length > 0 ? (
+            <ul data-testid="history-list" className="space-y-1">
+              {visibleRuns.map((run) => (
                 <HistoryRunRow
                   key={run.id}
                   run={run}
@@ -180,6 +249,7 @@ function HistoryRunRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const creditsLabel = historyCreditsLabel(run);
   return (
     <li>
       <button
@@ -190,26 +260,39 @@ function HistoryRunRow({
         data-scope={run.scope}
         data-selected={selected ? "true" : undefined}
         onClick={onSelect}
-        className={`w-full px-3 py-2.5 text-left transition-colors ${
+        className={`w-full rounded-[var(--field-radius)] px-3 py-2.5 text-left transition-colors ${
           selected
-            ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+            ? "bg-[color-mix(in_srgb,var(--accent-play)_10%,transparent)]"
             : "hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
         }`}
       >
         <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <StatusDot status={run.status} />
+            <span
+              data-testid="history-run-status"
+              data-status={run.status}
+              className={`text-sm font-medium ${statusTextClass(run.status)}`}
+            >
+              {statusDisplayLabel(run.status)}
+            </span>
+          </div>
           <time
             data-testid="history-run-timestamp"
             dateTime={run.createdAt}
-            className="text-xs font-medium text-[var(--text)]"
+            className="shrink-0 text-[11px] text-[var(--text-muted)]"
           >
             {formatTimestamp(run.createdAt)}
           </time>
-          <StatusBadge status={run.status} testId="history-run-status" />
         </div>
-        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-          <span data-testid="history-run-scope">
-            {runScopeLabel(run.scope)}
-          </span>
+        <p
+          data-testid="history-run-credits"
+          className="mt-1 text-[11px] text-[var(--text-muted)]"
+        >
+          Credits: {creditsLabel}
+        </p>
+        <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
+          <span data-testid="history-run-scope">{run.scope === "node" ? "Node" : "Workflow"}</span>
           <span aria-hidden>·</span>
           <span data-testid="history-run-duration">
             {formatDuration(run.durationMs)}
@@ -220,6 +303,64 @@ function HistoryRunRow({
   );
 }
 
+function historyCreditsLabel(run: RunHistoryEntry): string {
+  const credits = run.costCredits;
+  if (credits == null) return "—";
+  const m = toDisplayM(run.costDisplayM, credits);
+  return `${formatHistoryCreditsM(m)}M`;
+}
+
+function StatusDot({ status }: { status: RunStatus }) {
+  return (
+    <span
+      aria-hidden
+      className={`mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full ${statusDotClass(status)}`}
+    />
+  );
+}
+
+function statusDotClass(status: RunStatus): string {
+  switch (status) {
+    case "completed":
+      return "bg-[var(--success)]";
+    case "failed":
+      return "bg-[var(--danger)]";
+    case "running":
+      return "bg-[var(--accent-play)]";
+    default:
+      return "bg-[var(--text-muted)]";
+  }
+}
+
+function statusTextClass(status: RunStatus): string {
+  switch (status) {
+    case "completed":
+      return "text-[var(--success)]";
+    case "failed":
+      return "text-[var(--danger)]";
+    case "running":
+      return "text-[var(--accent-play)]";
+    default:
+      return "text-[var(--text-muted)]";
+  }
+}
+
+export function statusDisplayLabel(status: RunStatus): string {
+  switch (status) {
+    case "queued":
+      return "Queued";
+    case "running":
+      return "Running";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return status;
+  }
+}
 
 function RunDetailPanel({
   detail,
@@ -572,7 +713,8 @@ function StatusBadge({
   );
 }
 
-function statusBadgeClass(status: RunStatus): string {
+/** Status badge tokens: completed `--success`, failed `--danger`, running `--accent-play`. */
+export function statusBadgeClass(status: RunStatus): string {
   switch (status) {
     case "completed":
       return "bg-[color-mix(in_srgb,var(--success)_18%,white)] text-[var(--success)]";
@@ -608,10 +750,12 @@ export function formatTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
-    month: "short",
+    month: "numeric",
     day: "numeric",
-    hour: "2-digit",
+    year: "numeric",
+    hour: "numeric",
     minute: "2-digit",
+    second: "2-digit",
   });
 }
 
@@ -651,24 +795,4 @@ export function nodeErrorMessage(error: unknown): string | null {
   } catch {
     return String(error);
   }
-}
-
-function HistoryClockIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0 text-[var(--text-muted)]"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
 }

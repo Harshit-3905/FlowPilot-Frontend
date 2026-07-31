@@ -47,6 +47,8 @@ export const historyFixtures = {
       createdAt: "2026-07-30T10:00:00.000Z",
       completedAt: "2026-07-30T10:00:05.000Z",
       durationMs: 5000,
+      costCredits: 100,
+      costDisplayM: 0.0001,
     },
     {
       id: "run_hist_2",
@@ -56,6 +58,7 @@ export const historyFixtures = {
       createdAt: "2026-07-30T10:01:00.000Z",
       completedAt: null,
       durationMs: null,
+      costCredits: null,
     },
     {
       id: "run_hist_failed",
@@ -65,6 +68,8 @@ export const historyFixtures = {
       createdAt: "2026-07-30T10:02:00.000Z",
       completedAt: "2026-07-30T10:02:03.000Z",
       durationMs: 3000,
+      costCredits: 210_000,
+      costDisplayM: 0.21,
     },
   ],
 };

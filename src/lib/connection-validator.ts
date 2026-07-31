@@ -1,5 +1,6 @@
 import type { Connection, Edge, Node } from "@xyflow/react";
 import { getNode } from "@/contracts/node-definition";
+import { fieldTypeToDataType, readDynamicFields } from "@/components/nodes/request-node-body";
 
 /**
  * Returns true if sourceType → targetType is a valid data-type connection.
@@ -7,7 +8,30 @@ import { getNode } from "@/contracts/node-definition";
  */
 export function typesCompatible(sourceType: string, targetType: string): boolean {
   if (sourceType === "any" || targetType === "any") return true;
-  return sourceType === targetType;
+  if (sourceType === targetType) return true;
+  // Magica Request text ports wire to string prompts.
+  const src = sourceType === "text" ? "string" : sourceType;
+  const tgt = targetType === "text" ? "string" : targetType;
+  return src === tgt;
+}
+
+function resolveHandleDataType(
+  node: Node,
+  handleId: string,
+  side: "source" | "target",
+): string | null {
+  const def = getNode(node.type ?? "");
+  if (!def) return null;
+
+  if (side === "source" && node.type === "request") {
+    const field = readDynamicFields(node.data).find((f) => f.id === handleId);
+    if (field) return fieldTypeToDataType(field.type);
+  }
+
+  const list =
+    side === "source" ? def.ui.handles.outputs : def.ui.handles.inputs;
+  const handle = list.find((h) => h.id === handleId);
+  return handle?.dataType ?? null;
 }
 
 /**
@@ -23,18 +47,10 @@ export function makeIsValidConnection(nodes: Node[]) {
     const targetNode = nodes.find((n) => n.id === target);
     if (!sourceNode || !targetNode) return false;
 
-    const sourceDef = getNode(sourceNode.type ?? "");
-    const targetDef = getNode(targetNode.type ?? "");
-    if (!sourceDef || !targetDef) return false;
+    const sourceType = resolveHandleDataType(sourceNode, sourceHandle, "source");
+    const targetType = resolveHandleDataType(targetNode, targetHandle, "target");
+    if (!sourceType || !targetType) return false;
 
-    const sourceHandle_ = sourceDef.ui.handles.outputs.find(
-      (h) => h.id === sourceHandle,
-    );
-    const targetHandle_ = targetDef.ui.handles.inputs.find(
-      (h) => h.id === targetHandle,
-    );
-    if (!sourceHandle_ || !targetHandle_) return false;
-
-    return typesCompatible(sourceHandle_.dataType, targetHandle_.dataType);
+    return typesCompatible(sourceType, targetType);
   };
 }

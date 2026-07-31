@@ -108,6 +108,8 @@ export type RunDetailResponse = z.infer<typeof RunDetailResponseSchema>;
 /**
  * History sidebar list entry: timestamp + status + duration + scope (+ ids).
  * `createdAt` is the list timestamp; `durationMs` when the run has completedAt.
+ * Optional `costCredits` / `costDisplayM` for Magica “Credits: X.XXXXM” row copy
+ * (BE may omit until list aggregate ships).
  */
 export const RunHistoryEntrySchema = z.object({
   id: z.string(),
@@ -117,6 +119,8 @@ export const RunHistoryEntrySchema = z.object({
   createdAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
   durationMs: z.number().int().nonnegative().nullable(),
+  costCredits: z.number().int().nonnegative().nullable().optional(),
+  costDisplayM: z.number().optional(),
 });
 
 export type RunHistoryEntry = z.infer<typeof RunHistoryEntrySchema>;

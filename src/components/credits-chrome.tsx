@@ -32,7 +32,7 @@ export function CreditsChrome({
       <span
         data-testid="credits-est"
         data-value={estimateM ?? ""}
-        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]"
+        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-xs font-medium text-[var(--text)] shadow-[var(--shadow-soft)]"
         title="Estimated credit cost"
       >
         <EstIcon />
@@ -41,7 +41,12 @@ export function CreditsChrome({
       <span
         data-testid="credits-bal"
         data-value={balanceM ?? ""}
-        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]"
+        data-insufficient={insufficient ? "true" : undefined}
+        className={
+          insufficient
+            ? "inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--danger)_40%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_6%,white)] px-2.5 py-1 text-xs font-medium text-[var(--danger)] shadow-[var(--shadow-soft)]"
+            : "inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-xs font-medium text-[var(--text)] shadow-[var(--shadow-soft)]"
+        }
         title="Credit balance"
       >
         <BalIcon />
@@ -51,7 +56,7 @@ export function CreditsChrome({
         <span
           data-testid="credits-insufficient-hint"
           role="status"
-          className="text-xs font-medium text-[var(--danger)]"
+          className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_8%,white)] px-2 py-1 text-xs font-medium text-[var(--danger)]"
         >
           Insufficient credits
         </span>

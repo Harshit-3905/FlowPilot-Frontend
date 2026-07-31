@@ -35,9 +35,24 @@ export interface EditorState {
     position?: { x: number; y: number },
   ) => Node | undefined;
   updateNodeData: (nodeId: string, key: string, value: unknown) => void;
+  /** Magica Request-Inputs: dual-write `dynamicFields` + `inputs.dynamicFields`. */
+  setDynamicFields: (
+    nodeId: string,
+    fields: Array<{
+      id: string;
+      name: string;
+      type: string;
+      value: string;
+    }>,
+  ) => void;
   setActiveSubModel: (nodeId: string, subModelId: string) => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
+  /** Clone one node; optionally remapped edges that touched the original. */
+  duplicateNode: (nodeId: string, withEdges?: boolean) => void;
+  deleteNode: (nodeId: string) => void;
+  toggleNodeLock: (nodeId: string) => void;
+  resetNodeInputs: (nodeId: string) => void;
 }
 
 function buildNodeDefaults(type: string): Record<string, unknown> {
@@ -92,7 +107,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       position: position ?? { x: 250, y: 150 },
       data: {
         label: def.label,
-        inputs: buildNodeDefaults(type),
+        inputs:
+          type === "request"
+            ? { dynamicFields: [] }
+            : buildNodeDefaults(type),
+        ...(type === "request" ? { dynamicFields: [] } : {}),
         config: {
           activeSubModelId: def.subModels?.[0]?.id ?? null,
         },
@@ -119,6 +138,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             }
           : n,
       ),
+    });
+  },
+  setDynamicFields: (nodeId, fields) => {
+    set({
+      nodes: get().nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const prevInputs =
+          (n.data.inputs as Record<string, unknown> | undefined) ?? {};
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            dynamicFields: fields,
+            inputs: { ...prevInputs, dynamicFields: fields },
+          },
+        };
+      }),
     });
   },
   setActiveSubModel: (nodeId, subModelId) => {
@@ -191,6 +227,91 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       nodes: nextNodes,
       edges: [...edges, ...clonedEdges],
+    });
+  },
+  duplicateNode: (nodeId, withEdges = false) => {
+    const { nodes, edges } = get();
+    const source = nodes.find((n) => n.id === nodeId);
+    if (!source) return;
+
+    const newId = `${source.type}_${nanoid()}`;
+    const clone: Node = {
+      ...source,
+      id: newId,
+      position: { x: source.position.x + 50, y: source.position.y + 50 },
+      selected: false,
+      data: structuredClone(source.data),
+    };
+    const nextNodes = [...nodes, clone];
+    const clonedEdges: Edge[] = withEdges
+      ? edges
+          .filter((e) => e.source === nodeId || e.target === nodeId)
+          .map((e) =>
+            colorizeEdge(
+              {
+                ...e,
+                id: `e_${nanoid()}`,
+                source: e.source === nodeId ? newId : e.source,
+                target: e.target === nodeId ? newId : e.target,
+              },
+              nextNodes,
+            ),
+          )
+      : [];
+
+    set({
+      nodes: nextNodes,
+      edges: [...edges, ...clonedEdges],
+    });
+  },
+  deleteNode: (nodeId) => {
+    const { nodes, edges } = get();
+    const target = nodes.find((n) => n.id === nodeId);
+    const locked = Boolean(
+      (target?.data?.config as Record<string, unknown> | undefined)?.locked,
+    );
+    if (locked) return;
+    set({
+      nodes: nodes.filter((n) => n.id !== nodeId),
+      edges: edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+    });
+  },
+  toggleNodeLock: (nodeId) => {
+    set({
+      nodes: get().nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const prev =
+          (n.data.config as Record<string, unknown> | undefined) ?? {};
+        const locked = !Boolean(prev.locked);
+        return {
+          ...n,
+          draggable: !locked,
+          deletable: !locked,
+          data: {
+            ...n.data,
+            config: { ...prev, locked },
+          },
+        };
+      }),
+    });
+  },
+  resetNodeInputs: (nodeId) => {
+    const { nodes } = get();
+    const target = nodes.find((n) => n.id === nodeId);
+    if (!target?.type) return;
+    const defaults = buildNodeDefaults(target.type);
+    set({
+      nodes: nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                inputs: { ...defaults },
+              },
+            }
+          : n,
+      ),
     });
   },
 }));

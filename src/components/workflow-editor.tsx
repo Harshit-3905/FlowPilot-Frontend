@@ -9,11 +9,14 @@ import { WorkflowCanvas } from "@/components/workflow-canvas";
 import { NodePalette } from "@/components/node-palette";
 import { HistorySidebar } from "@/components/history-sidebar";
 import { CreditsChrome } from "@/components/credits-chrome";
+import { PlaygroundPanel } from "@/components/playground-panel";
+import { ApiPanel } from "@/components/api-panel";
 import {
   WorkflowRunProvider,
   useWorkflowRun,
 } from "@/components/workflow-run-context";
 import { useEditorStore, type WorkflowGraphDTO } from "@/store/editor-store";
+import { useHistoryStore } from "@/store/history-store";
 import { useAutoSave, type SaveStatus } from "@/hooks/use-auto-save";
 import { useWorkflowCredits } from "@/hooks/use-workflow-credits";
 import { z } from "zod";
@@ -43,13 +46,47 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const saveStatus = useAutoSave(workflowId, getToken);
+  const lastRunId = runCtx?.lastRunId ?? null;
+  const refreshedRunId = useRef<string | null>(null);
+  const refreshedTerminalKey = useRef<string | null>(null);
+
+  /** Live run terminal key — Bal may settle (refund) after complete/fail. */
+  const terminalCreditsKey = useHistoryStore((s) => {
+    if (!s.liveRunId) return null;
+    const run = s.runs.find((r) => r.id === s.liveRunId);
+    if (!run) return null;
+    if (
+      run.status !== "completed" &&
+      run.status !== "failed" &&
+      run.status !== "cancelled"
+    ) {
+      return null;
+    }
+    return `${run.id}:${run.status}:${run.completedAt ?? ""}`;
+  });
 
   const handlePlay = useCallback(async () => {
+    setTab("workflow");
     setHistoryOpen(true);
-    // Refresh Est/Bal immediately before run (Slice 4); BE block is Slice 5.
+    // Refresh Est/Bal immediately before run; BE enforces 402.
     await refreshCredits();
     await runCtx?.runWorkflow();
   }, [refreshCredits, runCtx]);
+
+  // After start succeeds, estimate is reserved — refresh Bal to match product.
+  useEffect(() => {
+    if (!lastRunId || refreshedRunId.current === lastRunId) return;
+    refreshedRunId.current = lastRunId;
+    void refreshCredits();
+  }, [lastRunId, refreshCredits]);
+
+  // After run settles, refresh Bal again (refund / final balance).
+  useEffect(() => {
+    if (!terminalCreditsKey) return;
+    if (refreshedTerminalKey.current === terminalCreditsKey) return;
+    refreshedTerminalKey.current = terminalCreditsKey;
+    void refreshCredits();
+  }, [terminalCreditsKey, refreshCredits]);
 
   const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRename = useCallback(
@@ -87,6 +124,11 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     return () =>
       window.removeEventListener("flowpilot:open-palette", openPalette);
   }, []);
+
+  useEffect(() => {
+    refreshedRunId.current = null;
+    refreshedTerminalKey.current = null;
+  }, [workflowId]);
 
   if (loading) {
     return (
@@ -170,7 +212,13 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             data-testid="history-toggle"
             aria-label={historyOpen ? "Hide history" : "Show history"}
             aria-pressed={historyOpen}
-            onClick={() => setHistoryOpen((v) => !v)}
+            onClick={() => {
+              setHistoryOpen((open) => {
+                const next = !open;
+                if (next) setTab("workflow");
+                return next;
+              });
+            }}
             className={
               historyOpen
                 ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] shadow-[var(--shadow-soft)]"
@@ -182,7 +230,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         </div>
         <nav
           data-testid="workflow-tabs"
-          className="mt-2 flex gap-6"
+          className="mt-2.5 flex gap-5"
           aria-label="Editor views"
         >
           {(
@@ -200,8 +248,8 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               onClick={() => setTab(id)}
               className={
                 tab === id
-                  ? "border-b-2 border-[var(--text)] pb-2 text-sm font-medium text-[var(--text)]"
-                  : "border-b-2 border-transparent pb-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+                  ? "border-b-2 border-[var(--text)] pb-2.5 text-[13px] font-medium tracking-tight text-[var(--text)]"
+                  : "border-b-2 border-transparent pb-2.5 text-[13px] font-medium tracking-tight text-[var(--text-muted)] hover:text-[var(--text)]"
               }
             >
               {label}
@@ -220,66 +268,22 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               onClose={() => setPaletteOpen(false)}
             />
           </div>
-          {historyOpen ? <HistorySidebar workflowId={workflowId} /> : null}
+          {historyOpen ? (
+            <HistorySidebar
+              workflowId={workflowId}
+              onClose={() => setHistoryOpen(false)}
+            />
+          ) : null}
         </div>
       ) : null}
 
-      {tab === "playground" ? <PlaygroundPlaceholder /> : null}
-      {tab === "api" ? <ApiPlaceholder /> : null}
-    </div>
-  );
-}
-
-function PlaygroundPlaceholder() {
-  return (
-    <div
-      data-testid="playground-panel"
-      className="flex flex-1 overflow-hidden bg-[var(--bg)]"
-    >
-      <aside className="w-72 shrink-0 border-r border-[var(--border)] bg-[var(--panel)] p-4">
-        <h2 className="mb-3 text-sm font-semibold text-[var(--text)]">Inputs</h2>
-        <p className="text-xs text-[var(--text-muted)]">
-          Playground inputs will appear here when runs are wired (doc 05/10).
-        </p>
-      </aside>
-      <div className="flex flex-1 flex-col">
-        <div className="flex items-center justify-end border-b border-[var(--border)] bg-[var(--panel)] px-4 py-2">
-          <button
-            type="button"
-            disabled
-            className="rounded-md bg-[var(--accent-primary-cta)] px-4 py-1.5 text-sm font-medium text-white opacity-60"
-          >
-            Run
-          </button>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center p-6">
-          <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">Output</h2>
-          <p className="text-sm text-[var(--text-muted)]">No output yet</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ApiPlaceholder() {
-  return (
-    <div
-      data-testid="api-panel"
-      className="flex flex-1 overflow-auto bg-[var(--bg)] p-6"
-    >
-      <div className="mx-auto w-full max-w-2xl rounded-[var(--node-radius)] border border-[var(--border)] bg-[var(--panel)] p-6">
-        <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">API</h2>
-        <p className="mb-4 text-sm text-[var(--text-muted)]">
-          Call this workflow via the public API. Docs and keys land with later
-          slices — structure only for now.
-        </p>
-        <pre className="overflow-x-auto rounded-[var(--field-radius)] bg-[var(--bg)] p-4 font-[family-name:var(--font-geist-mono)] text-xs text-[var(--text)]">
-{`POST /api/v1/workflows/{id}/run
-Authorization: Bearer <token>
-
-{ "inputs": { ... } }`}
-        </pre>
-      </div>
+      {tab === "playground" ? (
+        <PlaygroundPanel
+          workflowId={workflowId}
+          estimateM={credits.estimateM}
+        />
+      ) : null}
+      {tab === "api" ? <ApiPanel workflowId={workflowId} /> : null}
     </div>
   );
 }
@@ -337,10 +341,11 @@ function RunStatusBanner() {
       data-testid="run-status"
       data-kind="error"
       data-code={status.code ?? "error"}
+      data-credits-banner={isCredits ? "true" : undefined}
       role="alert"
       className={
         isCredits
-          ? "mt-2 mb-1 flex items-start justify-between gap-3 rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_8%,white)] px-3 py-2 text-xs text-[var(--danger)]"
+          ? "mt-2 mb-1 flex items-start justify-between gap-3 rounded-md border border-[color-mix(in_srgb,var(--danger)_40%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_10%,white)] px-3 py-2.5 text-xs text-[var(--danger)] shadow-[var(--shadow-soft)]"
           : "mt-2 pb-2 text-xs text-[var(--danger)]"
       }
     >
@@ -359,7 +364,7 @@ function RunStatusBanner() {
           type="button"
           data-testid="run-status-dismiss"
           onClick={runCtx.clearStatus}
-          className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text)]"
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--danger)_8%,white)] hover:text-[var(--text)]"
         >
           Dismiss
         </button>

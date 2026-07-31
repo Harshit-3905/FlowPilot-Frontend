@@ -298,7 +298,7 @@ export function WorkflowsHome() {
                 placeholder="Search workflows..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="h-9 w-full rounded-full border border-[var(--border)] bg-[var(--panel)] py-1.5 pl-9 pr-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--text-muted)]"
+                className="h-9 w-full rounded-[var(--field-radius)] border border-[var(--border)] bg-[var(--bg)] py-1.5 pl-9 pr-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--text-muted)]"
               />
             </label>
           </div>

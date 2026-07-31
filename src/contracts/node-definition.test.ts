@@ -99,7 +99,7 @@ describe("nodeRegistry", () => {
 
   it("includes request", () => {
     expect(nodeRegistry.request?.type).toBe("request");
-    expect(getNode("request")?.label).toBe("Request Inputs");
+    expect(getNode("request")?.label).toBe("Request-Inputs");
     expect(listNodes().some((n) => n.type === "request")).toBe(true);
   });
 

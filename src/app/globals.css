@@ -23,13 +23,14 @@
   --mode-active: #1c1c1e;
   --toggle-on: #3b82f6;
   --upload-dash: #d1d1d6;
+  --grid-dot: #d1d1d6;
   /* Product marketing banner red — token exists; chrome omits banner (decision-log). */
   --promo: #ff0033;
   --node-radius: 14px;
   --field-radius: 8px;
   --node-width: 380px;
   --rail-width: 52px;
-  /* Soft Magica chrome / node elevation (tokens.md ~12–16px blur). */
+  /* Soft Magica chrome / node elevation (tokens.md ~12–16px blur). No colored glow. */
   --shadow-soft: 0 2px 8px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.04);
   --background: var(--bg);
   --foreground: var(--text);
@@ -56,6 +57,7 @@
   --color-mode-active: var(--mode-active);
   --color-toggle-on: var(--toggle-on);
   --color-upload-dash: var(--upload-dash);
+  --color-grid-dot: var(--grid-dot);
   --color-promo: var(--promo);
   --radius-node: var(--node-radius);
   --radius-field: var(--field-radius);
